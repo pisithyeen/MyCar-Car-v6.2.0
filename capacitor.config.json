@@ -1,0 +1,12 @@
+{
+  "appId": "com.mycar.care.kh",
+  "appName": "MyCar Care KH",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*"
+    ],
+    "cleartext": true
+  }
+}

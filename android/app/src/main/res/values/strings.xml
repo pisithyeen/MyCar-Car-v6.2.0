@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MyCar Care KH</string>
+    <string name="title_activity_main">MyCar Care KH</string>
+    <string name="package_name">com.mycar.care.kh</string>
+    <string name="custom_url_scheme">com.mycar.care.kh</string>
+</resources>
