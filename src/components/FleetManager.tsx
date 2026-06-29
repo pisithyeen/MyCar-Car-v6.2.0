@@ -395,11 +395,158 @@ export default function FleetManager({
     { id: "ex-4", vehicleId: "fv-2", driverId: "dr-3", category: "Toll", amount: 5, date: "2026-06-19", stationName: "Phnom Penh - Sihanoukville Expressway Toll", notes: "Expressway pass receipt attached", status: "Approved" }
   ]);
 
-  const [notifications, setNotifications] = useState<FleetNotification[]>([
-    { id: "nt-1", title: "Trip Started", message: "Driver Chhoun Borey started trip log with VIP Alphard Boss (#fv-1).", timestamp: "12 mins ago", channel: "Telegram", read: false },
-    { id: "nt-2", title: "Fuel Expense Submitted", message: "Sok Cheat submitted a $65 fuel receipt at PTT Chbar Ampov.", timestamp: "1 hour ago", channel: "In-App", read: false },
-    { id: "nt-3", title: "Insurance Expiry Warning", message: "Eco Delivery Prius insurance expires in less than 60 days.", timestamp: "1 day ago", channel: "Email", read: true }
-  ]);
+  const [notifications, setNotifications] = useState<FleetNotification[]>(() => {
+    try {
+      const saved = localStorage.getItem("mcc_fleet_notifications");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn("Failed to load notifications from localStorage:", e);
+    }
+    return [
+      { id: "nt-1", title: "Trip Started", message: "Driver Chhoun Borey started trip log with VIP Alphard Boss (#fv-1).", timestamp: "12 mins ago", channel: "Telegram", read: false },
+      { id: "nt-2", title: "Fuel Expense Submitted", message: "Sok Cheat submitted a $65 fuel receipt at PTT Chbar Ampov.", timestamp: "1 hour ago", channel: "In-App", read: false },
+      { id: "nt-3", title: "Insurance Expiry Warning", message: "Eco Delivery Prius insurance expires in less than 60 days.", timestamp: "1 day ago", channel: "Email", read: true }
+    ];
+  });
+
+  const [triggeredMaintenanceAlert, setTriggeredMaintenanceAlert] = useState<{
+    vehicleId: string;
+    vehicleName: string;
+    plateNumber: string;
+    odometer: number;
+    nextService: number;
+    exceededBy: number;
+  } | null>(null);
+
+  const [simSelectedVehicleId, setSimSelectedVehicleId] = useState<string>("");
+
+  // Sync notifications to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("mcc_fleet_notifications", JSON.stringify(notifications));
+    } catch (e) {
+      console.warn("Failed to save notifications to localStorage:", e);
+    }
+  }, [notifications]);
+
+  // Sync initial simulation vehicle selection
+  useEffect(() => {
+    if (vehicles.length > 0 && !simSelectedVehicleId) {
+      setSimSelectedVehicleId(vehicles[0].id);
+    }
+  }, [vehicles, simSelectedVehicleId]);
+
+  // Core background effect checking for and triggering new maintenance alerts using local storage
+  useEffect(() => {
+    if (vehicles.length === 0) return;
+
+    let triggeredAlertKeys: string[] = [];
+    try {
+      const saved = localStorage.getItem("mcc_triggered_maintenance_alerts");
+      if (saved) {
+        triggeredAlertKeys = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn("Failed to load triggered alerts from localStorage:", e);
+    }
+
+    let updatedAlerts = [...triggeredAlertKeys];
+    let newlyTriggered = false;
+    let alertToDisplay: any = null;
+
+    vehicles.forEach(vehicle => {
+      const isExceeded = vehicle.odometer >= vehicle.nextService;
+      if (isExceeded) {
+        const alertKey = `${vehicle.id}-${vehicle.nextService}`;
+        if (!updatedAlerts.includes(alertKey)) {
+          updatedAlerts.push(alertKey);
+          newlyTriggered = true;
+
+          const exceededBy = vehicle.odometer - vehicle.nextService;
+          const newNotif: FleetNotification = {
+            id: `nt-maint-${Date.now()}-${vehicle.id}`,
+            title: `⚠️ Maintenance Overdue: ${vehicle.name}`,
+            message: `Manufacturer's recommended maintenance interval of ${vehicle.nextService.toLocaleString()} km is exceeded by ${exceededBy.toLocaleString()} km. Odometer is currently ${vehicle.odometer.toLocaleString()} km. Immediate servicing recommended!`,
+            timestamp: "Just now",
+            channel: "In-App",
+            read: false
+          };
+
+          setNotifications(prev => [newNotif, ...prev]);
+
+          alertToDisplay = {
+            vehicleId: vehicle.id,
+            vehicleName: vehicle.name,
+            plateNumber: vehicle.plateNumber,
+            odometer: vehicle.odometer,
+            nextService: vehicle.nextService,
+            exceededBy: exceededBy
+          };
+        }
+      }
+    });
+
+    if (newlyTriggered) {
+      try {
+        localStorage.setItem("mcc_triggered_maintenance_alerts", JSON.stringify(updatedAlerts));
+      } catch (e) {
+        console.warn("Failed to save triggered alerts to localStorage:", e);
+      }
+    }
+
+    if (alertToDisplay) {
+      setTriggeredMaintenanceAlert(alertToDisplay);
+    }
+  }, [vehicles]);
+
+  const handleSimulateMileageAdd = (km: number) => {
+    const targetId = simSelectedVehicleId || vehicles[0]?.id;
+    if (!targetId) return;
+
+    setVehicles(prev => prev.map(v => {
+      if (v.id === targetId) {
+        const newOdo = v.odometer + km;
+        
+        // Sync with app-level states
+        if (setAppVehicles && appVehicles) {
+          setAppVehicles(p => p.map(av => av.id === targetId ? { ...av, mileage: newOdo } : av));
+        }
+
+        return { ...v, odometer: newOdo };
+      }
+      return v;
+    }));
+
+    triggerNotification("Mileage Increased (Simulated)", `Simulated drive added +${km.toLocaleString()} km to selected vehicle.`);
+  };
+
+  const handleSimulateMileageSet = (newOdo: number) => {
+    const targetId = simSelectedVehicleId || vehicles[0]?.id;
+    if (!targetId) return;
+
+    setVehicles(prev => prev.map(v => {
+      if (v.id === targetId) {
+        // Sync with app-level states
+        if (setAppVehicles && appVehicles) {
+          setAppVehicles(p => p.map(av => av.id === targetId ? { ...av, mileage: newOdo } : av));
+        }
+
+        return { ...v, odometer: newOdo };
+      }
+      return v;
+    }));
+
+    triggerNotification("Mileage Artificially Set", `Odometer artificially adjusted to ${newOdo.toLocaleString()} km to test threshold triggers.`);
+  };
+
+  const handleResetAlertTriggers = () => {
+    try {
+      localStorage.removeItem("mcc_triggered_maintenance_alerts");
+      triggerNotification("Simulator Cache Cleared", "Successfully cleared simulation alert cache. Odometer exceedance triggers will re-fire on next update!");
+    } catch (e) {
+      console.warn("Failed to clear alert triggers:", e);
+    }
+  };
 
   const [bootstrapped, setBootstrapped] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -506,7 +653,7 @@ export default function FleetManager({
                 nickname: v.name,
                 plateNumber: v.plateNumber,
                 photoUrl: v.photoUrl,
-                notes: "Seeded Fleet Vehicle auto-synced to Odometer & Logger"
+                notes: "Seeded Fleet Vehicle auto-synced to My Vehicle & Logger"
               })
             });
           } catch (e) {
@@ -925,7 +1072,7 @@ export default function FleetManager({
       setAppVehicles([appNewVeh, ...appVehicles]);
     }
 
-    // Save to the backend so that they sync to the parent Odometer & Logger dashboard as well!
+    // Save to the backend so that they sync to the parent My Vehicle & Logger dashboard as well!
     fetch("/api/vehicles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1514,7 +1661,7 @@ export default function FleetManager({
                                   // Update local list
                                   setVehicles(vehicles.map(v => v.id === bulletin.refId ? { ...v, odometer: svcMileage, nextService: svcMileage + 5000, status: 'Available' } : v));
 
-                                  // Update parent state instantly for Odometer & Logger tab
+                                  // Update parent state instantly for My Vehicle & Logger tab
                                   if (setAppVehicles && appVehicles) {
                                     setAppVehicles(prev => prev.map(v => v.id === bulletin.refId ? {
                                       ...v,
@@ -1597,7 +1744,7 @@ export default function FleetManager({
                 </div>
                 <h4 className="text-xs font-black text-slate-200 uppercase tracking-wide">Unified Odometer & Record Sync Utility</h4>
                 <p className="text-[11px] text-slate-400 max-w-2xl leading-relaxed">
-                  Links driver-logged Odometer trip completions and vehicle service entries in real-time. Updates are immediately published across both the <strong className="text-slate-300">Odometer & Logger</strong> home view and the <strong className="text-slate-300">Fleet & Family Manager</strong>.
+                  Links driver-logged Odometer trip completions and vehicle service entries in real-time. Updates are immediately published across both the <strong className="text-slate-300">My Vehicle & Logger</strong> home view and the <strong className="text-slate-300">Fleet & Family Manager</strong>.
                 </p>
               </div>
             </div>
@@ -2721,6 +2868,95 @@ export default function FleetManager({
             </button>
           </div>
 
+          {/* Interactive Maintenance Alert Simulator Panel */}
+          {(() => {
+            const simVehicle = vehicles.find(v => v.id === simSelectedVehicleId) || vehicles[0];
+            return (
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-850 pb-3">
+                  <Car className="w-5 h-5 text-indigo-400" />
+                  <div>
+                    <h4 className="text-xs font-black text-slate-100 uppercase tracking-wider">Interactive Maintenance Alert Simulator</h4>
+                    <p className="text-[10px] text-slate-400">Test the local storage based notification trigger by artificially increasing mileage</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Select Fleet Vehicle</label>
+                    <select
+                      id="sim-vehicle-select"
+                      className="w-full bg-slate-950 border border-slate-800 p-2 text-xs text-slate-200 rounded-xl"
+                      value={simSelectedVehicleId || (vehicles[0]?.id || "")}
+                      onChange={(e) => setSimSelectedVehicleId(e.target.value)}
+                    >
+                      {vehicles.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.name} ({v.plateNumber})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="p-3 bg-slate-950/60 border border-slate-850 rounded-xl flex justify-between items-center text-xs">
+                    <div>
+                      <span className="text-slate-400 text-[10px] block">Odometer / Next Service</span>
+                      <span className="font-mono text-slate-200 font-bold">
+                        {simVehicle ? simVehicle.odometer.toLocaleString() : 0} km / {simVehicle ? simVehicle.nextService.toLocaleString() : 0} km
+                      </span>
+                    </div>
+                    <div>
+                      {simVehicle && simVehicle.odometer >= simVehicle.nextService ? (
+                        <span className="px-2 py-0.5 bg-rose-500/15 text-rose-400 text-[10px] font-bold uppercase rounded-md border border-rose-500/20">
+                          ⚠️ OVERDUE
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-bold uppercase rounded-md border border-emerald-500/20">
+                          ✅ GOOD STATUS
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      id="btn-sim-add-mileage"
+                      onClick={() => handleSimulateMileageAdd(1500)}
+                      className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 text-xs rounded-xl transition flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add +1,500 km</span>
+                    </button>
+                    <button
+                      id="btn-sim-trigger"
+                      onClick={() => {
+                        const targetVeh = simVehicle || vehicles[0];
+                        if (targetVeh) {
+                          handleSimulateMileageSet(targetVeh.nextService + 250);
+                        }
+                      }}
+                      className="bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-300 font-bold py-2 px-3 text-xs rounded-xl transition flex items-center justify-center gap-1"
+                      title="Directly trigger service exceedance"
+                    >
+                      <span>Trigger Alert</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2 border-t border-slate-850">
+                  <span>Interval Limit: {simVehicle ? (simVehicle.nextService - simVehicle.odometer > 0 ? `Needs service in ${(simVehicle.nextService - simVehicle.odometer).toLocaleString()} km` : `Overdue by ${(simVehicle.odometer - simVehicle.nextService).toLocaleString()} km`) : ""}</span>
+                  <button
+                    id="btn-sim-reset-triggers"
+                    onClick={handleResetAlertTriggers}
+                    className="hover:text-indigo-400 transition underline font-bold"
+                  >
+                    Clear Alert Cache
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="space-y-3">
             {notifications.map((notif) => (
               <div key={notif.id} className={`p-4 rounded-2xl border flex items-start gap-3.5 ${
@@ -2850,6 +3086,102 @@ export default function FleetManager({
           setExpenses={setExpenses}
           triggerNotification={triggerNotification}
         />
+      )}
+
+
+      {/* Real-Time Maintenance Overdue Trigger Modal Overlay */}
+      {triggeredMaintenanceAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-slate-900 border-2 border-rose-500 rounded-3xl p-6 max-w-md w-full text-left space-y-4 shadow-2xl shadow-rose-500/10 relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-500/10 rounded-full blur-xl pointer-events-none"></div>
+            
+            <div className="flex items-center gap-3 text-rose-500 border-b border-slate-850 pb-3">
+              <div className="p-2 bg-rose-500/10 rounded-xl">
+                <AlertTriangle className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-slate-100 uppercase tracking-wider">Manufacturer Limit Exceeded</h3>
+                <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">Active Alert Notification Triggered</span>
+              </div>
+            </div>
+
+            <div className="space-y-3 py-1">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center font-bold text-slate-400 border border-slate-850 text-xs">
+                  {triggeredMaintenanceAlert.vehicleName.substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-200">{triggeredMaintenanceAlert.vehicleName}</h4>
+                  <p className="text-[10px] text-slate-400 font-mono uppercase">{triggeredMaintenanceAlert.plateNumber}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-850">
+                <div>
+                  <span className="text-[8px] text-slate-500 uppercase font-bold block">Current Recorded</span>
+                  <span className="text-xs font-black text-rose-400 font-mono">
+                    {triggeredMaintenanceAlert.odometer.toLocaleString()} km
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[8px] text-slate-500 uppercase font-bold block">Recommended Limit</span>
+                  <span className="text-xs font-black text-slate-300 font-mono">
+                    {triggeredMaintenanceAlert.nextService.toLocaleString()} km
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-300 leading-relaxed bg-rose-950/20 border border-rose-500/10 p-3 rounded-xl">
+                The vehicle has exceeded the manufacturer's recommended maintenance interval of <strong className="text-slate-100 font-bold">{triggeredMaintenanceAlert.nextService.toLocaleString()} km</strong> by <strong className="text-rose-400 font-bold">{triggeredMaintenanceAlert.exceededBy.toLocaleString()} km</strong>.
+                Continued operations without servicing may compromise fuel economy, engine reliability, and warranty.
+              </p>
+            </div>
+
+            <div className="flex gap-2 border-t border-slate-850 pt-3">
+              <button
+                onClick={() => setTriggeredMaintenanceAlert(null)}
+                className="flex-1 py-2 px-3 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-300 font-bold text-xs rounded-xl transition"
+              >
+                Acknowledge & Close
+              </button>
+              <button
+                onClick={() => {
+                  const targetVehId = triggeredMaintenanceAlert.vehicleId;
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  
+                  // Update local state to clear overdue
+                  setVehicles(vehicles.map(v => v.id === targetVehId ? { ...v, odometer: v.nextService, nextService: v.nextService + 5000, status: 'Available' } : v));
+
+                  if (setAppVehicles && appVehicles) {
+                    setAppVehicles(prev => prev.map(v => v.id === targetVehId ? {
+                      ...v,
+                      mileage: v.nextService,
+                      lastServiceDate: todayStr
+                    } : v));
+                  }
+
+                  // Add a persistent service history record
+                  const newServiceRecord: ServiceHistoryRecord = {
+                    id: `sh-sim-${Date.now()}`,
+                    vehicleId: targetVehId,
+                    date: todayStr,
+                    description: "Simulated Oil & Filter change preventive maintenance completed.",
+                    odometer: triggeredMaintenanceAlert.nextService,
+                    status: 'Completed'
+                  };
+                  setServiceHistory([newServiceRecord, ...serviceHistory]);
+
+                  triggerNotification("Maintenance Completed", `Logged preventive service for ${triggeredMaintenanceAlert.vehicleName} to clear overdue status.`);
+                  setTriggeredMaintenanceAlert(null);
+                }}
+                className="flex-1 py-2 px-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Perform Service Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
 

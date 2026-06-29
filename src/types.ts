@@ -56,6 +56,13 @@ export interface VehicleProfile {
   transmission?: 'Automatic' | 'Manual' | 'CVT' | 'Dual-Clutch' | 'Single-Speed' | 'Other';
   regCardPhotoUrl?: string;
 
+  // New compatibility system fields
+  vehicleCategory?: 'car' | 'motorbike' | 'truck' | 'van' | 'pickup' | 'tuk tuk' | 'bus' | 'EV' | 'hybrid' | 'heavy equipment';
+  engineTypeNew?: 'petrol' | 'diesel' | 'electric' | 'hybrid' | 'plug-in hybrid' | 'LPG/CNG' | 'unknown';
+  fuelEnergyType?: 'petrol' | 'diesel' | 'electric' | 'petrol + electric' | 'diesel + electric' | 'gas';
+  transmissionType?: 'manual' | 'automatic' | 'CVT' | 'EV single-speed' | 'unknown';
+  usageType?: 'personal' | 'family' | 'company' | 'delivery' | 'taxi' | 'ride-hailing' | 'fleet' | 'rental' | 'off-road';
+
   // Petrol/Gasoline specific fields (also can apply to Petrol Motorcycle)
   gasolineFuelType?: 'Regular 92' | 'Premium 95' | 'Super 98';
   engineSize?: string;

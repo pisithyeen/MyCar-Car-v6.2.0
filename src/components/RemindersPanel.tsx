@@ -49,6 +49,14 @@ import {
   UserX
 } from "lucide-react";
 import { VehicleProfile, SmartReminder, NotificationLog, MaintenanceRecord } from "../types";
+import {
+  hasEvBatteryAndCharging,
+  hasElectricChargingPlug,
+  hasPetrolSystem,
+  isPureEV,
+  hasDieselSystem,
+  hasLpgCngSystem
+} from "../utils/compatibility";
 
 const REMINDER_CATEGORIES = [
   "Engine Oil Change",
@@ -1498,8 +1506,19 @@ export default function RemindersPanel({
               ];
 
               const activeMilestones = candidates.filter(c => {
-                if (c.supported === 'all') return true;
-                return c.supported.includes(fuel);
+                if (c.key === 'oil' || c.key === 'timing') {
+                  return !isPureEV(selectedVehicle);
+                }
+                if (c.key === 'transmission') {
+                  return !isPureEV(selectedVehicle);
+                }
+                if (c.key === 'spark') {
+                  return hasPetrolSystem(selectedVehicle) && !isPureEV(selectedVehicle);
+                }
+                if (c.key === 'ev-battery') {
+                  return hasEvBatteryAndCharging(selectedVehicle);
+                }
+                return true;
               });
 
               // Helper to find latest matching record from props

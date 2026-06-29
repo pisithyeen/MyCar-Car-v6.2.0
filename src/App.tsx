@@ -755,7 +755,7 @@ export default function App() {
       switch (userProfile?.role) {
         case "Vehicle Owner":
           return [
-            { id: "dashboard", label: "Odometer & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
             { id: "fleet_manager", label: "★ Fleet & Family Manager", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
             { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
             { 
@@ -777,7 +777,7 @@ export default function App() {
         case "Vehicle Manager":
           return [
             { id: "fleet_manager", label: "★ Fleet Dashboard", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "Odometer & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
             { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
             { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
             { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
@@ -787,7 +787,7 @@ export default function App() {
         case "Driver / Staff":
           return [
             { id: "fleet_manager", label: "★ Driver Console", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "Odometer & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
             { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
           ];
         case "Garage Owner":

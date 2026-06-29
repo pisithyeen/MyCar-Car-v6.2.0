@@ -213,6 +213,92 @@ Inputs needed:
 - GPS Coordinates placeholder displaying current lat/long and a subtle map thumbnail mockup
 - Notes Text Area
 - Section at the bottom: "Receipt & Log Proof" with a visual file dropzone, a preview of an uploaded receipt/ticket, and a "Submit to Fleet Manager" high-contrast action button.`
+    },
+    {
+      title: "5. COMPLETE Vehicle Manager KH Blueprint (Paste directly into Claude)",
+      prompt: `Act as a senior UI/UX and React/Tailwind expert. Generate a highly polished, production-ready, interactive single-page Dashboard wireframe specifically for the "Vehicle Manager" user role in the "MyCar Care KH (Cambodia)" ecosystem.
+
+Global Brand Aesthetic Constraints:
+- Dark slate theme (bg-slate-950 canvas, bg-slate-900 panels with 1px border of slate-800, text-slate-100/200, emerald-400 and indigo-400 accents).
+- High-contrast, spacious layout with clean letter-spacing and sharp corners.
+- Type pairing: "Space Grotesk" for display metrics/headings, "Inter" for UI body copy, "JetBrains Mono" for numeric readouts and plate numbers (e.g. PP-2AA-8888).
+
+Map and Wireframe the following modular user views, widgets, and detailed workflows step-by-step:
+
+1. GLOBAL NAVIGATION & STATE HEADER:
+   - A minimalist, sleek top navbar containing the logo "MyCar Care KH", role indicator badge ("Vehicle Manager / Chief of Fleet"), and an active sync status beacon ("Local Cache Sync Active" with emerald pulse).
+   - Sidebar Drawer Layout mapping 6 navigation links: Overview Dashboard, Vehicles Inventory, Driver & Assign Ledger, Fuel & Odometer Logs, Expense Approvals, and AI Advisory.
+
+2. SIX (6) CORE MULTI-METRIC PERFORMANCE CARDS:
+   - Total Fleet count ("4 Registered Vehicles").
+   - Available units count ("2 Units Active").
+   - At-Garage repair bay status ("1 Unit Servicing" - BYD Atto 3).
+   - Outstanding Expense requests ("3 Driver fuel slips pending").
+   - Combined Fleet expenses count ("$3,120 USD this month").
+   - Critical Compliance / Expiry alert ("Hilux road tax due in 25 days").
+
+3. LOCAL STORAGE-DRIVEN REAL-TIME ALERTS BANNER:
+   - Map a persistent maintenance warning bar that triggers automatically when odometer exceeds the recommended maintenance limit.
+   - Text readout: "⚠️ Maintenance Overdue: [Vehicle Name] plate [Plate Number] is overdue by [exceeded] km! Standard 5,000 km oil change limit exceeded. Immediate action required."
+   - Two visible inline actions: [Acknowledge & Close] and [Perform Service Now].
+
+4. HIGH-COST SPENDING VISUAL ANALYTICS:
+   - "High-Cost Vehicle Spending Ledger" ranking all units by total outlay.
+   - For each vehicle, render beautiful dual-colored horizontal progress bars representing Fuel Expense (Emerald Green) vs. Shop Repairs (Indigo Purple) to quickly pinpoint inefficient vehicles.
+
+5. COURIER & DRIVER ASSIGNMENT INTERFACE:
+   - Row-by-row card layout containing vehicle names, plates, and current driver names.
+   - Status indicators: "Available" (emerald pulse), "In Use" (blue map arrow), "At Garage" (amber wrench).
+   - An interactive [Assign / Swap] button that opens an in-line picker popover mapping available drivers (Sok Cheat, Chhoun Borey, Ly Hour) to assign with one-click.
+
+6. DRIVER TRIP LOG & RECEIPT OCR CAPTURE:
+   - A robust trip registration form mapping Start/End odometer readings, Trip Purpose selection, and a drag-and-drop area for receipt/ticket slips.
+   - Provide a visual placeholder displaying GPS latitude/longitude details (11.5621° N, 104.9151° E) synced with the device.
+
+Output the entire solution as an incredibly polished, responsive, component-driven React + Tailwind CSS dashboard mockup, containing mockup states so the user can interactively trigger assignments, fuel entries, and maintenance resets.`
+    },
+    {
+      title: "6. COMPLETE Garage Owner KH Blueprint (Paste directly into Claude)",
+      prompt: `Act as a senior UI/UX and React/Tailwind expert. Generate a highly polished, production-ready, interactive single-page Dashboard wireframe specifically for the "Garage Owner / Workshop Operator" user role in the "MyCar Care KH (Cambodia)" ecosystem.
+
+Global Brand Aesthetic Constraints:
+- Dark slate theme (bg-slate-950 canvas, bg-slate-900 panels with 1px border of slate-800, text-slate-100/200, emerald-400 and indigo-400 accents).
+- High-contrast, spacious layout with clean letter-spacing and sharp corners.
+- Type pairing: "Space Grotesk" for display metrics/headings, "Inter" for UI body copy, "JetBrains Mono" for numeric readouts, currency conversions, and Cambodian plate numbers (e.g. PP-2AA-8888).
+
+Map and Wireframe the following modular user views, interactive components, and detailed workflows step-by-step:
+
+1. WORKSHOP BAYS & ACTIVE REPAIRS BOARD:
+   - Three columns representing active Workshop Bays: [Bay 1: Diagnosing] (e.g. BYD Atto 3), [Bay 2: Active Repair] (e.g. Toyota Hilux), [Bay 3: Quality Check] (e.g. Lexus RX330).
+   - Each card in a bay must display: Vehicle model, Cambodian plate number, customer name, active mechanic name, and a visual service progress bar.
+   - Clickable action: A dropdown status-selector to simulate moving a vehicle to a different repair stage (e.g., from "In Repair" to "Quality Check").
+
+2. SERVICE BOOKINGS & SCHEDULER:
+   - A list of incoming service requests from fleet vehicles (synced from odometer alerts or user-reported trouble codes like Check Engine).
+   - Display a high-visibility badge showing the reported issue (e.g. "Overdue Oil Change", "Squeaking Brake Pads").
+   - Interactive [Approve Bookings] button that assigns an empty bay and schedule slot automatically.
+
+3. DUAL-CURRENCY USD/KHR DIGITAL QUOTATION GENERATOR:
+   - An interactive billing/receipt-builder form.
+   - Allow user to add parts list items: "Premium Synthetic Oil (5L)", "Front Brake Pads Set", "Cabin Air Filter", and "Mechanic Labor Fee".
+   - Automatically calculate totals in both USD and KHR (using a fixed conversion rate of 1 USD = 4,100 KHR).
+   - Real-time output display: Total: $125.00 USD / 512,500 KHR.
+   - Clickable button: "Send Digital Quotation to Customer" with a loading feedback state.
+
+4. CAMBODIAN SPARE PARTS INVENTORY TRACKER:
+   - List key components in high demand in Cambodia:
+     - Toyota Prius Gen 2 hybrid water pump (Stock: 2 units - CRITICAL LOW).
+     - Lexus RX300/RX330 ignition coil (Stock: 12 units - HEALTHY).
+     - Toyota Alphard executive brake disk (Stock: 4 units - MODERATE).
+   - Status indicators for stock status: "Critical" (red pulse), "Moderate" (amber), "Good" (green).
+   - Interactive "Order Stock" action that mocks an API call to a local importer/distributor.
+
+5. MECHANIC DISPATCHING BOARDS:
+   - Visual row displaying active mechanics on duty: Mr. Sok Rath (Expert Hybrid Tech), Mr. Ly Hour (EV Master), and Mr. Chetra (Suspension & Brake Expert).
+   - Indicators showing whether each mechanic is "Busy" (red) or "Available" (green).
+   - Interactive "Assign Mechanic" dropdown list to quickly swap dispatch roles on active vehicles.
+
+Output the entire solution as a fully responsive, pixel-perfect, interactive React component with robust state managers to demo real-time booking approvals, dual-currency invoice calculations, and bay status transitions.`
     }
   ];
 

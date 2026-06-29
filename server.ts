@@ -4272,6 +4272,13 @@ app.post("/api/ai/reminder-suggestion", async (req: Request, res: Response) => {
 
   const relativeRecords = maintenanceRecords.filter(r => r.vehicleId === vehicleId);
 
+  const fuel = (vehicle.fuelType || "Gasoline").toLowerCase();
+  const engineType = vehicle.engineTypeNew || "";
+  const fuelEnergyType = vehicle.fuelEnergyType || "";
+  const isEv = engineType === "electric" || fuelEnergyType === "electric" || fuel === "ev";
+  const isHybrid = engineType === "hybrid" || engineType === "plug-in hybrid" || fuel === "hybrid";
+  const isDiesel = engineType === "diesel" || fuel === "diesel";
+
   const prompt = `
 Generate exactly 3 vehicle-specific service reminder suggestions tailored for MyCar Care KH.
 Vehicle specifications:
@@ -4280,9 +4287,16 @@ Vehicle specifications:
 - Manufacturing Year: ${vehicle.year}
 - Current Odometer Reading: ${vehicle.mileage} km
 - Fuel System type: ${vehicle.fuelType}
+- Engine Type: ${engineType}
+- Fuel Energy Type: ${fuelEnergyType}
 Historical repairs completed: ${JSON.stringify(relativeRecords)}
 
 Note: Driving in Cambodia is defined by severe thermal degradation, extremely dusty road conditions during dry seasons, and localized flooding in urban Phnom Penh districts during monsoons (May to October). This leads to premature wear on engines, suspension components, steering rod ball joints, and electrical connectors.
+
+COMPATIBILITY RESTRICTIONS:
+- IS_EV = ${isEv}. If IS_EV is true, you MUST NOT generate "Engine Oil Change", "Oil Filter", "Transmission Oil", or any other combustion-only engine categories. Instead, suggest "EV Battery Health Check", "EV Charging System Check", "Brake Check", "Tire Check", or "Full Inspection".
+- IS_DIESEL = ${isDiesel}. If IS_DIESEL is true, recommend diesel engine filters/checks (like Fuel Filter or DPF check).
+- Avoid recommending EV-specific reminders for combustion-only cars (e.g. do not suggest EV Battery Health Check or EV Charging System Check for a Toyota Tacoma 2006).
 
 Return a valid, strict JSON array containing exactly 3 elements, with no surrounding quotes or markdown. Each object has these attributes:
 - category: matches one of these pre-registered categories: "Engine Oil Change", "Oil Filter", "Air Filter", "Brake Check", "Tire Check", "Tire Rotation", "Battery Check", "Coolant Check", "Transmission Oil", "Car Wash", "Full Inspection", "Insurance Renewal", "Road Tax Renewal", "EV Battery Health Check", "EV Charging System Check", "Road Trip Inspection", "Custom Reminder"
@@ -6812,6 +6826,12 @@ app.post("/api/ai/diagnosis", async (req: Request, res: Response) => {
   const fuel = vehicle ? vehicle.fuelType : "Gasoline";
   const mileageKm = vehicle ? vehicle.mileage : 120000;
 
+  const engineType = vehicle ? (vehicle.engineTypeNew || "") : "";
+  const fuelEnergyType = vehicle ? (vehicle.fuelEnergyType || "") : "";
+  const isEv = vehicle ? (vehicle.engineTypeNew === "electric" || vehicle.fuelEnergyType === "electric" || fuel.toLowerCase() === "ev") : false;
+  const isHybrid = vehicle ? (vehicle.engineTypeNew === "hybrid" || vehicle.engineTypeNew === "plug-in hybrid" || fuel.toLowerCase() === "hybrid") : false;
+  const isDiesel = vehicle ? (vehicle.engineTypeNew === "diesel" || fuel.toLowerCase() === "diesel") : false;
+
   const client = getGeminiClient();
 
   if (client) {
@@ -6822,11 +6842,19 @@ app.post("/api/ai/diagnosis", async (req: Request, res: Response) => {
 Analyze following symptoms:
 Vehicle: ${brandStr}
 Fuel Type: ${fuel}
+Engine Type: ${engineType}
+Fuel Energy Type: ${fuelEnergyType}
 Mileage: ${mileageKm} km
 Symptom: "${symptom}"
 Cambodian Driving Conditions: Extreme heat, traffic gridlock, dust, rainy season water wading/floods.
 
 Determine safe driving suggestions and possible issues.
+
+COMPATIBILITY RULES:
+- The vehicle has specific attributes: IS_EV = ${isEv}, IS_HYBRID = ${isHybrid}, IS_DIESEL = ${isDiesel}.
+- Since IS_EV is ${isEv}, you MUST NOT recommend any combustion features like engine oil, spark plugs, oil filters, transmission belts, or fuel system repairs if it is a pure EV (IS_EV = true).
+- Since IS_DIESEL is ${isDiesel}, recommend diesel-specific filters, oil, and DPF checks if relevant.
+- Avoid any irrelevant platform recommendations (e.g. do not give EV battery diagnostics advice to a pure petrol/diesel car; do not suggest engine spark plugs or exhaust emissions diagnostics to a pure EV).
 
 Safety guidelines:
 - If issue involves brake failure, steering failure, fire smell, fuel leak, battery smoke, tyre burst, heavy engine overheating, EV high voltage, classify risk as high or emergency.

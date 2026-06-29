@@ -103,6 +103,13 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
   const [notes, setNotes] = useState("");
   const [engineType, setEngineType] = useState<EngineType>("Plug-in Hybrid / PHEV");
 
+  // Compatibility Engine States
+  const [vehicleCategory, setVehicleCategory] = useState<'car' | 'motorbike' | 'truck' | 'van' | 'pickup' | 'tuk tuk' | 'bus' | 'EV' | 'hybrid' | 'heavy equipment'>("car");
+  const [engineTypeNew, setEngineTypeNew] = useState<'petrol' | 'diesel' | 'electric' | 'hybrid' | 'plug-in hybrid' | 'LPG/CNG' | 'unknown'>("hybrid");
+  const [fuelEnergyType, setFuelEnergyType] = useState<'petrol' | 'diesel' | 'electric' | 'petrol + electric' | 'diesel + electric' | 'gas'>("petrol + electric");
+  const [transmissionType, setTransmissionType] = useState<'manual' | 'automatic' | 'CVT' | 'EV single-speed' | 'unknown'>("CVT");
+  const [usageType, setUsageType] = useState<'personal' | 'family' | 'company' | 'delivery' | 'taxi' | 'ride-hailing' | 'fleet' | 'rental' | 'off-road'>("personal");
+
   // Enginespecific states
   const [gasolineFuelType, setGasolineFuelType] = useState<any>("Premium 95");
   const [gasolineEngineSize, setGasolineEngineSize] = useState("1.8L");
@@ -269,6 +276,13 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
       transmission,
       regCardPhotoUrl,
       
+      // Compatibility fields
+      vehicleCategory,
+      engineTypeNew,
+      fuelEnergyType,
+      transmissionType,
+      usageType,
+      
       gasolineFuelType,
       engineSize: engineType === "Diesel" ? dieselEngineSize : engineType.includes("Hybrid") ? hybridEngineSize : gasolineEngineSize,
       oilChangeInterval: Number(engineType === "Diesel" ? dieselOilInterval : gasolineOilInterval),
@@ -358,6 +372,13 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
       transmission,
       owner: ownerName,
       
+      // Compatibility fields
+      vehicleCategory,
+      engineTypeNew,
+      fuelEnergyType,
+      transmissionType,
+      usageType,
+      
       gasolineFuelType,
       engineSize: gasolineEngineSize,
       oilChangeInterval: Number(gasolineOilInterval),
@@ -435,7 +456,37 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         fuelConsumptionEstimate: "9.2L/100km",
         photoUrl: "https://images.unsplash.com/photo-1621007947382-cc34aa864ee3?auto=format&fit=crop&q=80&w=600",
         regCardPhotoUrl: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=600",
-        notes: "Legendary 2GR-FE V6 engine. Flawless smooth ride for Cambodian provincial tours."
+        notes: "Legendary 2GR-FE V6 engine. Flawless smooth ride for Cambodian provincial tours.",
+        vehicleCategory: "car" as any,
+        engineTypeNew: "petrol" as any,
+        fuelEnergyType: "petrol" as any,
+        transmissionType: "automatic" as any,
+        usageType: "personal" as any
+      },
+      {
+        id: "seed-tacoma",
+        brand: "Toyota",
+        model: "Tacoma V6 4x4",
+        year: 2006,
+        mileage: 245000,
+        fuelType: "Gasoline" as any,
+        engineType: "Petrol / Gasoline" as EngineType,
+        vehicleType: "Pickup" as any,
+        plateNumber: "PP-2A-1906",
+        chassisNumber: "5TETF26A86Z123456",
+        transmission: "Automatic" as any,
+        owner: "Prum Samath",
+        gasolineFuelType: "Regular 92" as any,
+        engineSize: "4.0L",
+        oilChangeInterval: 5000,
+        fuelConsumptionEstimate: "12.8L/100km",
+        photoUrl: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600",
+        notes: "Robust V6 petrol-only pickup. Pure mechanical reliability with zero high-voltage components.",
+        vehicleCategory: "pickup" as any,
+        engineTypeNew: "petrol" as any,
+        fuelEnergyType: "petrol" as any,
+        transmissionType: "automatic" as any,
+        usageType: "off-road" as any
       },
       {
         id: "seed-diesel",
@@ -456,7 +507,38 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         dieselFuelFilterInterval: 15000,
         dieselOilChangeInterval: 7500,
         photoUrl: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600",
-        notes: "Bi-turbo setup. Uses ultra-low sulfur diesel when available in Phnom Penh to prevent EGR clogging."
+        notes: "Bi-turbo setup. Uses ultra-low sulfur diesel when available in Phnom Penh to prevent EGR clogging.",
+        vehicleCategory: "pickup" as any,
+        engineTypeNew: "diesel" as any,
+        fuelEnergyType: "diesel" as any,
+        transmissionType: "automatic" as any,
+        usageType: "off-road" as any
+      },
+      {
+        id: "seed-byd-shark",
+        brand: "BYD",
+        model: "Shark Plug-In Hybrid",
+        year: 2024,
+        mileage: 8200,
+        fuelType: "Hybrid" as any,
+        engineType: "Plug-in Hybrid / PHEV" as EngineType,
+        vehicleType: "Pickup" as any,
+        plateNumber: "PP-2BY-9898",
+        chassisNumber: "LC0C2CBDXPP989898",
+        transmission: "CVT" as any,
+        owner: "Keo Socheat",
+        photoUrl: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600",
+        notes: "BYD Shark dual-motor AWD plug-in hybrid pickup truck. Handles rugged off-road terrain while running on EV power or petrol range extender.",
+        vehicleCategory: "pickup" as any,
+        engineTypeNew: "plug-in hybrid" as any,
+        fuelEnergyType: "petrol + electric" as any,
+        transmissionType: "CVT" as any,
+        usageType: "off-road" as any,
+        hybridType: "Plug-in Hybrid" as any,
+        hybridEngineSize: "1.5T",
+        hybridBatteryHealth: 99,
+        hybridEvRange: 100,
+        hybridBatteryInspectionInterval: 15000
       },
       {
         id: "seed-hybrid",
@@ -476,7 +558,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         hybridBatteryHealth: 82,
         hybridBatteryInspectionInterval: 12000,
         photoUrl: "https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&q=80&w=600",
-        notes: "All-wheel drive hybrid SUV. Battery cabin fan is checked for Cambodia dust blocks monthly."
+        notes: "All-wheel drive hybrid SUV. Battery cabin fan is checked for Cambodia dust blocks monthly.",
+        vehicleCategory: "hybrid" as any,
+        engineTypeNew: "hybrid" as any,
+        fuelEnergyType: "petrol + electric" as any,
+        transmissionType: "CVT" as any,
+        usageType: "family" as any
       },
       {
         id: "seed-phev",
@@ -498,7 +585,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         hybridBatteryInspectionInterval: 15000,
         photoUrl: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&q=80&w=600",
         regCardPhotoUrl: "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=600",
-        notes: "Elegant crossover with active 4WD S-AWC traction. Provides silent EV mode running."
+        notes: "Elegant crossover with active 4WD S-AWC traction. Provides silent EV mode running.",
+        vehicleCategory: "hybrid" as any,
+        engineTypeNew: "plug-in hybrid" as any,
+        fuelEnergyType: "petrol + electric" as any,
+        transmissionType: "CVT" as any,
+        usageType: "family" as any
       },
       {
         id: "seed-ev",
@@ -521,7 +613,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         evHasHomeCharger: true,
         evBatteryCoolingType: "Liquid Cooled" as any,
         photoUrl: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?auto=format&fit=crop&q=80&w=600",
-        notes: "Uses durable LFP Blade Battery. Fully supported by BYD Cambodia flagship hub."
+        notes: "Uses durable LFP Blade Battery. Fully supported by BYD Cambodia flagship hub.",
+        vehicleCategory: "EV" as any,
+        engineTypeNew: "electric" as any,
+        fuelEnergyType: "electric" as any,
+        transmissionType: "EV single-speed" as any,
+        usageType: "personal" as any
       },
       {
         id: "seed-lpg",
@@ -542,7 +639,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         lpgCngTankInspectionExpiryDate: "2029-05-12",
         lpgCngInspectionInterval: 10000,
         photoUrl: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600",
-        notes: "Converted high-end business van. Provides outstanding family commuting cost savings."
+        notes: "Converted high-end business van. Provides outstanding family commuting cost savings.",
+        vehicleCategory: "van" as any,
+        engineTypeNew: "LPG/CNG" as any,
+        fuelEnergyType: "gas" as any,
+        transmissionType: "CVT" as any,
+        usageType: "family" as any
       },
       {
         id: "seed-moto",
@@ -560,7 +662,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         motorcycleEngineSizeCc: "124.9cc",
         motorcycleDriveType: "Chain" as any,
         photoUrl: "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&q=80&w=600",
-        notes: "The daily standard workhorse in Phnom Penh streets. Extremely cheap to maintain."
+        notes: "The daily standard workhorse in Phnom Penh streets. Extremely cheap to maintain.",
+        vehicleCategory: "motorbike" as any,
+        engineTypeNew: "petrol" as any,
+        fuelEnergyType: "petrol" as any,
+        transmissionType: "manual" as any,
+        usageType: "personal" as any
       },
       {
         id: "seed-moto-ev",
@@ -581,7 +688,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         motorcycleChargingTimeHours: 5,
         motorcycleDriveType: "Direct Hub Drive" as any,
         photoUrl: "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&q=80&w=600",
-        notes: "Sleek eco-friendly scooter designed for low speed neighborhood errands."
+        notes: "Sleek eco-friendly scooter designed for low speed neighborhood errands.",
+        vehicleCategory: "motorbike" as any,
+        engineTypeNew: "electric" as any,
+        fuelEnergyType: "electric" as any,
+        transmissionType: "EV single-speed" as any,
+        usageType: "personal" as any
       },
       {
         id: "seed-other",
@@ -597,7 +709,12 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         transmission: "Single-Speed" as any,
         owner: "Sok Dara",
         photoUrl: "https://images.unsplash.com/photo-1621007947382-cc34aa864ee3?auto=format&fit=crop&q=80&w=600",
-        notes: "Hydrogen fuel cell tech concept vehicle. Serves as a fascinating technology platform showcase."
+        notes: "Hydrogen fuel cell tech concept vehicle. Serves as a fascinating technology platform showcase.",
+        vehicleCategory: "car" as any,
+        engineTypeNew: "unknown" as any,
+        fuelEnergyType: "electric" as any,
+        transmissionType: "EV single-speed" as any,
+        usageType: "personal" as any
       }
     ];
 
@@ -963,6 +1080,11 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                 setPlateNumber("");
                 setChassisNumber("");
                 setNotes("");
+                setVehicleCategory("car");
+                setEngineTypeNew("petrol");
+                setFuelEnergyType("petrol");
+                setTransmissionType("automatic");
+                setUsageType("personal");
                 setValidationErrors([]);
                 setIsAdding(true);
               }}
@@ -1080,6 +1202,102 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                   className="w-full bg-slate-950 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-sky-300 font-mono"
                   required
                 />
+              </div>
+            </div>
+
+            {/* Compatibility Engine Custom Setup */}
+            <div className="bg-slate-950/50 p-4 rounded-2xl border border-white/5 space-y-3">
+              <h4 className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Vehicle Feature Compatibility Engine Setup</span>
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Vehicle Category</label>
+                  <select
+                    value={vehicleCategory}
+                    onChange={(e: any) => setVehicleCategory(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-white font-bold"
+                  >
+                    <option value="car">Car</option>
+                    <option value="motorbike">Motorbike</option>
+                    <option value="truck">Truck</option>
+                    <option value="van">Van</option>
+                    <option value="pickup">Pickup</option>
+                    <option value="tuk tuk">Tuk Tuk</option>
+                    <option value="bus">Bus</option>
+                    <option value="EV">EV</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="heavy equipment">Heavy Equipment</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Engine Type</label>
+                  <select
+                    value={engineTypeNew}
+                    onChange={(e: any) => setEngineTypeNew(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-white font-bold"
+                  >
+                    <option value="petrol">Petrol</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="electric">Electric</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="plug-in hybrid">Plug-in Hybrid</option>
+                    <option value="LPG/CNG">LPG/CNG</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Fuel / Energy Type</label>
+                  <select
+                    value={fuelEnergyType}
+                    onChange={(e: any) => setFuelEnergyType(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-white font-bold"
+                  >
+                    <option value="petrol">Petrol</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="electric">Electric</option>
+                    <option value="petrol + electric">Petrol + Electric</option>
+                    <option value="diesel + electric">Diesel + Electric</option>
+                    <option value="gas">Gas</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Transmission Type</label>
+                  <select
+                    value={transmissionType}
+                    onChange={(e: any) => setTransmissionType(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-white font-bold"
+                  >
+                    <option value="manual">Manual</option>
+                    <option value="automatic">Automatic</option>
+                    <option value="CVT">CVT</option>
+                    <option value="EV single-speed">EV Single-Speed</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase">Usage Type</label>
+                  <select
+                    value={usageType}
+                    onChange={(e: any) => setUsageType(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl focus:outline-none text-white font-bold"
+                  >
+                    <option value="personal">Personal</option>
+                    <option value="family">Family</option>
+                    <option value="company">Company</option>
+                    <option value="delivery">Delivery</option>
+                    <option value="taxi">Taxi</option>
+                    <option value="ride-hailing">Ride-Hailing</option>
+                    <option value="fleet">Fleet</option>
+                    <option value="rental">Rental</option>
+                    <option value="off-road">Off-Road</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1779,6 +1997,11 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                         setEngineType(selectedV.engineType || "Petrol / Gasoline");
                         setTransmission(selectedV.transmission || "Automatic");
                         setVType(selectedV.vehicleType || "Car");
+                        setVehicleCategory(selectedV.vehicleCategory || "car");
+                        setEngineTypeNew(selectedV.engineTypeNew || "petrol");
+                        setFuelEnergyType(selectedV.fuelEnergyType || "petrol");
+                        setTransmissionType(selectedV.transmissionType || "automatic");
+                        setUsageType(selectedV.usageType || "personal");
                         setValidationErrors([]);
                         setIsEditing(true);
                         setIsAdding(false);
@@ -1823,6 +2046,79 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                         <div className="space-y-1">
                           <label className="text-[10px] text-slate-400">Plate number</label>
                           <input type="text" value={plateNumber} onChange={(e) => setPlateNumber(e.target.value)} className="w-full bg-slate-900 p-2 rounded-lg border border-white/5 text-white font-mono" />
+                        </div>
+                      </div>
+
+                      {/* Compatibility Engine Custom Setup */}
+                      <div className="p-3 bg-slate-900 rounded-xl border border-white/5 space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Feature Compatibility Setup</span>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase">Category</label>
+                            <select value={vehicleCategory} onChange={(e: any) => setVehicleCategory(e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-white font-semibold">
+                              <option value="car">Car</option>
+                              <option value="motorbike">Motorbike</option>
+                              <option value="truck">Truck</option>
+                              <option value="van">Van</option>
+                              <option value="pickup">Pickup</option>
+                              <option value="tuk tuk">Tuk Tuk</option>
+                              <option value="bus">Bus</option>
+                              <option value="EV">EV</option>
+                              <option value="hybrid">Hybrid</option>
+                              <option value="heavy equipment">Heavy Equipment</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase">Engine Type</label>
+                            <select value={engineTypeNew} onChange={(e: any) => setEngineTypeNew(e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-white font-semibold">
+                              <option value="petrol">Petrol</option>
+                              <option value="diesel">Diesel</option>
+                              <option value="electric">Electric</option>
+                              <option value="hybrid">Hybrid</option>
+                              <option value="plug-in hybrid">Plug-in Hybrid</option>
+                              <option value="LPG/CNG">LPG/CNG</option>
+                              <option value="unknown">Unknown</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase">Fuel/Energy</label>
+                            <select value={fuelEnergyType} onChange={(e: any) => setFuelEnergyType(e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-white font-semibold">
+                              <option value="petrol">Petrol</option>
+                              <option value="diesel">Diesel</option>
+                              <option value="electric">Electric</option>
+                              <option value="petrol + electric">Petrol + Electric</option>
+                              <option value="diesel + electric">Diesel + Electric</option>
+                              <option value="gas">Gas</option>
+                            </select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase">Transmission</label>
+                            <select value={transmissionType} onChange={(e: any) => setTransmissionType(e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-white font-semibold">
+                              <option value="manual">Manual</option>
+                              <option value="automatic">Automatic</option>
+                              <option value="CVT">CVT</option>
+                              <option value="EV single-speed">EV Single-Speed</option>
+                              <option value="unknown">Unknown</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 text-[11px]">
+                          <label className="text-[9px] text-slate-400 uppercase">Usage Type</label>
+                          <select value={usageType} onChange={(e: any) => setUsageType(e.target.value)} className="w-full bg-slate-950 border border-white/10 p-1.5 rounded-lg text-white font-semibold">
+                            <option value="personal">Personal</option>
+                            <option value="family">Family</option>
+                            <option value="company">Company</option>
+                            <option value="delivery">Delivery</option>
+                            <option value="taxi">Taxi</option>
+                            <option value="ride-hailing">Ride-Hailing</option>
+                            <option value="fleet">Fleet</option>
+                            <option value="rental">Rental</option>
+                            <option value="off-road">Off-Road</option>
+                          </select>
                         </div>
                       </div>
 

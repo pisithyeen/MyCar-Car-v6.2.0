@@ -56,6 +56,14 @@ import {
 } from "lucide-react";
 import { VehicleProfile, MaintenanceRecord, SmartReminder, VehicleExpense, AttachedDocument, UserNotificationSettings, UserProfile, GaragePartner } from "../types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
+import {
+  hasEvBatteryAndCharging,
+  hasElectricChargingPlug,
+  hasPetrolSystem,
+  isPureEV,
+  hasDieselSystem,
+  hasLpgCngSystem
+} from "../utils/compatibility";
 
 // Import modular Cambodia MyCar Care KH subtab interfaces
 import VehicleFleetView from "./VehicleFleetView";
@@ -740,6 +748,35 @@ export default function Dashboard({
   const [sim12VCrankingV, setSim12VCrankingV] = useState<number>(10.4);
   const [forceEvPreview, setForceEvPreview] = useState<boolean>(false);
 
+  // --- EV LIVE CHARGE & MILEAGE DEGRADATION STATES ---
+  const [evCurrentCharge, setEvCurrentCharge] = useState<number>(82);
+  const [evIsCharging, setEvIsCharging] = useState<boolean>(false);
+  const [evSimMileageOffset, setEvSimMileageOffset] = useState<number>(0);
+  const [evDiagScanActive, setEvDiagScanActive] = useState<boolean>(false);
+  const [evDiagProgress, setEvDiagProgress] = useState<number>(0);
+  const [evDiagScanCompleted, setEvDiagScanCompleted] = useState<boolean>(false);
+
+  // Diagnostics scan simulation effect
+  useEffect(() => {
+    let interval: any;
+    if (evDiagScanActive) {
+      setEvDiagProgress(0);
+      setEvDiagScanCompleted(false);
+      interval = setInterval(() => {
+        setEvDiagProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(interval);
+            setEvDiagScanActive(false);
+            setEvDiagScanCompleted(true);
+            return 100;
+          }
+          return prev + 10;
+        });
+      }, 150);
+    }
+    return () => clearInterval(interval);
+  }, [evDiagScanActive]);
+
   // --- DYNAMIC BATTERY HEALTH ANALYSIS ANALYSIS AND DEGRADATION PLOTTER ---
   const batteryHealthData = React.useMemo(() => {
     const v = selectedVehicle || vehicles[0] || null;
@@ -748,7 +785,7 @@ export default function Dashboard({
     // Is it an EV/Hybrid model (or did the user force EV preview mode for simulation purposes)
     const isEvOrHybrid = v.fuelType === 'Hybrid' || v.fuelType === 'EV' || forceEvPreview;
     const ageYears = Math.max(0, 2026 - v.year); // App baseline current year is 2026
-    const mileage = v.mileage || 0;
+    const mileage = (v.mileage || 0) + evSimMileageOffset;
 
     // 1. Calendar Degradation Baseline: 1.8% per year
     const calendarDegradationRate = 1.8;
@@ -879,7 +916,7 @@ export default function Dashboard({
       healthReport: calculatedSOH >= 88 ? "Prisitne SOH Status" : calculatedSOH >= 78 ? "Healthy Status" : calculatedSOH >= 70 ? "Accelerated Degradation Risk" : "Critical Swap Advised",
       estCapacityKwh: isEvOrHybrid ? (v.fuelType === 'EV' ? 75 : 1.3) : 0, // Mock baseline packs
     };
-  }, [selectedVehicle, vehicles, records, dcFastChargingPct, operatingTempC, forceEvPreview]);
+  }, [selectedVehicle, vehicles, records, dcFastChargingPct, operatingTempC, forceEvPreview, evSimMileageOffset]);
 
   // --- FILTERED NEARBY RECOMMENDED GARAGES COMPUTATION GRID ---
   const filteredNearbyGarages = React.useMemo(() => {
@@ -2555,6 +2592,315 @@ export default function Dashboard({
                   </div>
                 </div>
               </div>
+
+              {/* INTERACTIVE EV BATTERY HEALTH & LIVE CHARGE MONITOR COMPONENT */}
+              {selectedVehicle && hasEvBatteryAndCharging(selectedVehicle) && (
+                <div id="ev-battery-health-indicator" className="glass p-5 rounded-2xl border border-white/5 space-y-5 shadow-lg bg-slate-900/40 relative overflow-hidden backdrop-blur-md">
+                  {/* Background decorative pulsing light */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none animate-pulse"></div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-bold text-slate-100 tracking-tight flex items-center gap-2">
+                        <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20">
+                          <BatteryCharging className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <span>EV/Hybrid Battery Health & Live Charge Monitor</span>
+                      </h3>
+                      <p className="text-slate-400 text-[11px] leading-normal max-w-xl">
+                        Real-time BMS (Battery Management System) telemetry, active charge load sliders, and dynamic mileage degradation curves calibrated for the Cambodian climate.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {selectedVehicle?.fuelType === 'EV' ? (
+                        <span className="px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                          EV Active
+                        </span>
+                      ) : selectedVehicle?.fuelType === 'Hybrid' ? (
+                        <span className="px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+                          Hybrid Active
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                          <span>Simulated EV Model ({selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : "Standard Pack"})</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+                    {/* LEFT COLUMN: LIVE STATE OF CHARGE (SOC) MONITOR & CURRENT RANGE */}
+                    <div className="p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col justify-between space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">State of Charge (SOC)</span>
+                        <span className="text-[10px] font-mono text-slate-500">BMS PACK TELEMETRY</span>
+                      </div>
+
+                      <div className="flex items-center gap-5">
+                        {/* Interactive Battery Cell Visualizer */}
+                        <div className="relative flex-1 flex items-center h-24 bg-slate-950 rounded-xl border border-white/5 p-2 overflow-hidden">
+                          {/* Segmented Battery Fill */}
+                          <div 
+                            className="h-full rounded-lg transition-all duration-500 ease-out flex items-center justify-end pr-3"
+                            style={{ 
+                              width: `${evCurrentCharge}%`, 
+                              background: evCurrentCharge > 40 
+                                ? 'linear-gradient(90deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.3) 100%)' 
+                                : evCurrentCharge > 20 
+                                  ? 'linear-gradient(90deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.3) 100%)' 
+                                  : 'linear-gradient(90deg, rgba(244,63,94,0.15) 0%, rgba(244,63,94,0.3) 100%)',
+                              borderRight: `2px solid ${evCurrentCharge > 40 ? '#10b981' : evCurrentCharge > 20 ? '#f59e0b' : '#f43f5e'}`
+                            }}
+                          >
+                            {evIsCharging && (
+                              <Zap className="w-4 h-4 text-emerald-400 animate-pulse" />
+                            )}
+                          </div>
+
+                          {/* Centered Overlay Percentage */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                            <span className="text-3xl font-black font-mono text-slate-100 leading-none">
+                              {evCurrentCharge}%
+                            </span>
+                            <span className="text-[9px] text-slate-400 font-bold tracking-tight uppercase mt-1">
+                              {evIsCharging ? "Fast Charging Active" : "Discharging (Aux Standard)"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Display Range Figure */}
+                        <div className="text-left py-1">
+                          <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Est. Driving Range</span>
+                          <span className="text-2xl font-black font-mono text-emerald-400 leading-none">
+                            {Math.round(evCurrentCharge * (selectedVehicle?.evDrivingRange ? selectedVehicle.evDrivingRange / 100 : 4.5))} km
+                          </span>
+                          <span className="text-[9px] text-slate-400 block mt-1">
+                            Max: {selectedVehicle?.evDrivingRange || 450} km at 100%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Interactive Slider Control */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                          <label htmlFor="charge-range-slider" className="text-slate-400">Adjust Simulated Charge State</label>
+                          <span className="text-emerald-400 font-mono">{evCurrentCharge}%</span>
+                        </div>
+                        <input 
+                          id="charge-range-slider"
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          value={evCurrentCharge}
+                          onChange={(e) => setEvCurrentCharge(parseInt(e.target.value))}
+                          className="w-full accent-emerald-500 h-1 bg-slate-950 rounded-lg appearance-none cursor-pointer border border-white/5"
+                        />
+                      </div>
+
+                      {/* Charging Switch and Info */}
+                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                        <button
+                          onClick={() => setEvIsCharging(!evIsCharging)}
+                          className={`p-2 px-3.5 text-[10px] uppercase font-bold rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${
+                            evIsCharging 
+                              ? "bg-emerald-500/20 border-emerald-500/30 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                              : "bg-slate-950/40 border-white/5 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <Zap className={`w-3.5 h-3.5 ${evIsCharging ? "animate-bounce" : ""}`} />
+                          <span>{evIsCharging ? "Plugged in (Charging)" : "Connect Charger"}</span>
+                        </button>
+
+                        {evIsCharging && (
+                          <div className="text-right leading-tight">
+                            <span className="text-[9px] text-emerald-400 font-mono font-bold block">DC FAST: 45.8 kW Input</span>
+                            <span className="text-[8px] text-slate-500 font-mono">390V / 117A • Temp: 32.4°C</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: MILEAGE DEGRADATION & STATE OF HEALTH (SOH) ESTIMATOR */}
+                    <div className="p-4 bg-slate-950/40 border border-white/5 rounded-xl flex flex-col justify-between space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Traction SOH & Degradation</span>
+                        <span className="text-[9px] text-slate-500 font-mono font-bold">CALIBRATED COUPLING MODEL</span>
+                      </div>
+
+                      {/* Primary metrics row */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-slate-950/50 p-2.5 rounded-xl border border-white/5 leading-tight">
+                          <span className="text-[9px] text-slate-500 font-bold block uppercase">State of Health (SOH)</span>
+                          <span className="text-xl font-black font-mono text-slate-100 block mt-0.5">
+                            {batteryHealthData ? batteryHealthData.calculatedSOH : "92.0"}%
+                          </span>
+                          <span className={`text-[8.5px] font-semibold uppercase block mt-1 ${
+                            !batteryHealthData ? "text-emerald-400" :
+                            batteryHealthData.calculatedSOH >= 88 ? "text-emerald-400" :
+                            batteryHealthData.calculatedSOH >= 78 ? "text-amber-400" : "text-rose-400"
+                          }`}>
+                            {batteryHealthData ? batteryHealthData.healthReport : "Healthy Status"}
+                          </span>
+                        </div>
+
+                        <div className="bg-slate-950/50 p-2.5 rounded-xl border border-white/5 leading-tight">
+                          <span className="text-[9px] text-slate-500 font-bold block uppercase">Battery Degradation</span>
+                          <span className="text-xl font-black font-mono text-rose-400 block mt-0.5">
+                            {batteryHealthData ? (100 - batteryHealthData.calculatedSOH).toFixed(1) : "8.0"}%
+                          </span>
+                          <span className="text-[8.5px] text-slate-400 block mt-1">
+                            Total capacity loss estimate
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Degradation Breakdown List */}
+                      <div className="space-y-1.5 text-[10.5px]">
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-sky-400 rounded-full"></span>
+                            <span>Cyclic Mileage Wear:</span>
+                          </span>
+                          <span className="font-mono text-slate-200">
+                            {selectedVehicle ? ((selectedVehicle.mileage + evSimMileageOffset) * 0.00015).toFixed(2) : "0.00"}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></span>
+                            <span>Calendar Age Wear (1.8%/yr):</span>
+                          </span>
+                          <span className="font-mono text-slate-200">
+                            {selectedVehicle ? (Math.max(1, 2026 - selectedVehicle.year) * 1.8).toFixed(1) : "3.6"}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse"></span>
+                            <span>Phnom Penh Hot Climate Penalty:</span>
+                          </span>
+                          <span className="font-mono text-amber-300">
+                            +1.2% (Tropical thermal factor)
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Simulation Controllers */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1.5 border-t border-white/5">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase block mr-1">Simulation:</span>
+                        <button
+                          onClick={() => setEvSimMileageOffset(prev => prev + 10000)}
+                          className="px-2.5 py-1 text-[9.5px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 rounded border border-white/5 transition cursor-pointer"
+                        >
+                          Drive +10k km
+                        </button>
+                        <button
+                          onClick={() => setEvSimMileageOffset(prev => prev + 25000)}
+                          className="px-2.5 py-1 text-[9.5px] font-bold bg-white/5 hover:bg-white/10 text-slate-300 rounded border border-white/5 transition cursor-pointer"
+                        >
+                          Drive +25k km
+                        </button>
+                        {(evSimMileageOffset > 0 || evDiagScanCompleted) && (
+                          <button
+                            onClick={() => {
+                              setEvSimMileageOffset(0);
+                              setEvDiagScanCompleted(false);
+                              setEvDiagProgress(0);
+                            }}
+                            className="px-2.5 py-1 text-[9.5px] font-bold bg-rose-500/10 hover:bg-rose-500/15 text-rose-300 rounded border border-rose-500/20 transition cursor-pointer flex items-center gap-1 ml-auto"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Reset</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BOTTOM ACTION: DEEP DIAGNOSTIC SCANNER TRIGGER */}
+                  <div className="p-3 bg-slate-950/20 border border-white/5 rounded-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <Thermometer className="w-4 h-4 text-amber-500" />
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-300 block">BMS Calibration & Thermal Checkup</span>
+                          <p className="text-[9.5px] text-slate-500">Continuous load cell balancing protects the pack integrity from Phnom Penh thermal stress.</p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setEvDiagScanActive(true);
+                          setEvDiagScanCompleted(false);
+                        }}
+                        disabled={evDiagScanActive}
+                        className={`p-2 px-4 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                          evDiagScanActive
+                            ? "bg-slate-950 text-slate-500 border border-white/5 cursor-not-allowed"
+                            : "bg-emerald-500 text-slate-950 hover:bg-emerald-600 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                        }`}
+                      >
+                        {evDiagScanActive ? (
+                          <>
+                            <div className="w-3 h-3 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Scanning Pack ({evDiagProgress}%)</span>
+                          </>
+                        ) : (
+                          <>
+                            <Activity className="w-3.5 h-3.5" />
+                            <span>Trigger Deep Diagnostics Scan</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Progressive Calibration scan output */}
+                    {evDiagScanActive && (
+                      <div className="mt-3 space-y-1.5 animate-pulse">
+                        <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden">
+                          <div className="bg-emerald-500 h-full rounded-full transition-all duration-150" style={{ width: `${evDiagProgress}%` }}></div>
+                        </div>
+                        <span className="text-[9px] font-mono text-slate-500 block">
+                          {evDiagProgress < 30 ? "⚡ Accessing cell state registers..." :
+                           evDiagProgress < 65 ? "⚡ Measuring cell voltage differentials..." :
+                           evDiagProgress < 90 ? "⚡ Calibrating coolant flow parameters..." :
+                           "⚡ Finalizing State of Health computation..."}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Scanned results */}
+                    {evDiagScanCompleted && !evDiagScanActive && (
+                      <div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-xl space-y-2 animate-fade-in text-[10.5px]">
+                        <div className="flex items-center gap-1 font-bold text-emerald-400">
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Diagnostics Completed Successfully</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-300 font-mono text-[9.5px]">
+                          <div>
+                            <span className="text-slate-500 block">MAX CELL DELTA</span>
+                            <span className="text-slate-200 font-bold">8.4 mV (Optimal)</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">CELL TEMPERATURE</span>
+                            <span className="text-slate-200 font-bold">31.8 °C (Safe)</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">COOLING SYSTEM FLOW</span>
+                            <span className="text-slate-200 font-bold">98% (Active Liquid)</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-200 font-bold">INTERNAL RESISTANCE</span>
+                            <span className="text-slate-200 font-bold">1.25 mΩ (Healthy)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Quick Actions Panel */}
               <div className="glass p-5 rounded-2xl space-y-3 shadow-md border border-white/5">
