@@ -235,11 +235,12 @@ import WireframeStudio from "./WireframeStudio";
 
 export default function FleetManager({ 
   userProfile,
-  appVehicles,
+  appVehicles = [],
   setAppVehicles,
-  appRecords,
+  appRecords = [],
   setAppRecords,
   onRefreshData,
+  isSimulatedOffline = false,
 }: { 
   userProfile: any;
   appVehicles?: VehicleProfile[];
@@ -247,6 +248,7 @@ export default function FleetManager({
   appRecords?: MaintenanceRecord[];
   setAppRecords?: React.Dispatch<React.SetStateAction<MaintenanceRecord[]>>;
   onRefreshData?: () => void;
+  isSimulatedOffline?: boolean;
 }) {
   const [lang, setLang] = useState<'en' | 'kh'>('en');
   const activeTranslation = t[lang];
@@ -638,6 +640,10 @@ export default function FleetManager({
 
       if (localOnlySeeded.length > 0) {
         setBootstrapped(true);
+        if (isSimulatedOffline) {
+          console.log("[FleetManager] App is in simulated offline state. Skipping vehicle auto-bootstrap.");
+          return;
+        }
         Promise.all(localOnlySeeded.map(async (v) => {
           try {
             await fetch("/api/vehicles", {

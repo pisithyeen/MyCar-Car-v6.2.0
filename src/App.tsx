@@ -32,7 +32,9 @@ import {
   ShieldAlert,
   AlertTriangle,
   Coins,
-  Layers
+  Layers,
+  UserCheck,
+  Menu
 } from "lucide-react";
 import { UserProfile, VehicleProfile, MaintenanceRecord, GaragePartner } from "./types";
 import Dashboard from "./components/Dashboard";
@@ -49,17 +51,21 @@ import AIDreamCarAdvisor from "./components/AIDreamCarAdvisor";
 import { QuickServiceLogSystem } from "./components/QuickServiceLogSystem";
 import { VehicleRegistrationSystem } from "./components/VehicleRegistrationSystem";
 import RoleBasedFormSystem from "./components/RoleBasedFormSystem";
+import { isPureEV, hasEvBatteryAndCharging, hasDieselSystem, hasPetrolSystem } from "./utils/compatibility";
 
 import LoginScreen from "./components/LoginScreen";
 import GarageDashboard from "./components/GarageDashboard";
 import StationDashboard from "./components/StationDashboard";
+import EvStationDashboard from "./components/EvStationDashboard";
 import PartsDashboard from "./components/PartsDashboard";
 import FreelanceDashboard from "./components/FreelanceDashboard";
 import PendingApprovalScreen from "./components/PendingApprovalScreen";
 import SuspendedScreen from "./components/SuspendedScreen";
 import FixMyCarBiddingModule from "./components/FixMyCarBiddingModule";
 import FleetManager from "./components/FleetManager";
+import UserOnboardingTour from "./components/UserOnboardingTour";
 import { syncVehicleRecords } from "./utils/dataSync";
+import { RoleSwitcher } from "./components/RoleSwitcher";
 
 /**
  * Custom Hook that triggers whenever a driver submits a fuel or maintenance record,
@@ -124,6 +130,7 @@ export default function App() {
   // Navigation tabs state
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   
   // Sidebar Tools group expansion state
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ tools: true });
@@ -144,21 +151,26 @@ export default function App() {
       return;
     }
     
-    switch (userProfile.role) {
+    const activeRole = userProfile.active_role || userProfile.role;
+    switch (activeRole) {
       case "Vehicle Owner":
         setActiveTab("dashboard");
         break;
       case "Vehicle Manager":
         setActiveTab("fleet_manager");
         break;
-      case "Driver / Staff":
-        setActiveTab("fleet_manager");
+      case "Driver":
+        setActiveTab("fleet_manager"); // Driver Console
         break;
       case "Garage Owner":
-        setActiveTab("garage_control");
+      case "Garage Staff":
+        setActiveTab("parts_control"); // Business Dashboard / Workstation
         break;
       case "Petrol Station Partner":
         setActiveTab("station_control");
+        break;
+      case "EV Charging Station Partner":
+        setActiveTab("ev_station_control");
         break;
       case "Spare Part Shop":
         setActiveTab("parts_control");
@@ -172,7 +184,7 @@ export default function App() {
       default:
         setActiveTab("dashboard");
     }
-  }, [userProfile?.role, userProfile?.status]);
+  }, [userProfile?.active_role, userProfile?.role, userProfile?.status]);
   const [vehicles, setVehicles] = useState<VehicleProfile[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleProfile | null>(null);
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
@@ -180,6 +192,107 @@ export default function App() {
 
   // Call useFleetDataSync to keep vehicles and selectedVehicle synced with incoming driver records in real-time
   useFleetDataSync(records, vehicles, setVehicles, selectedVehicle, setSelectedVehicle);
+  
+  // Derived state based on user role and selected vehicle/business/user
+  const filteredVehicles = React.useMemo(() => {
+    if (!userProfile) return [];
+    const role = userProfile.active_role || userProfile.role;
+    const name = userProfile.name;
+    const activeVehId = userProfile.active_vehicle_id;
+    const activeBusId = userProfile.active_business_id;
+
+    let list = vehicles;
+
+    // First scope by active_role permissions
+    if (role === "Admin") {
+      // Admin has full view
+    } else if (role === "Vehicle Owner") {
+      list = list.filter(v => v.owner === name || v.owner?.toLowerCase() === name.toLowerCase());
+    } else if (role === "Vehicle Manager") {
+      list = list.filter(v => v.owner === name || v.id === "v1" || v.id === "v3");
+    } else if (role === "Driver" || role === "Driver / Staff") {
+      list = list.filter(v => v.id === "v2" || v.owner === name);
+    } else if (role === "Garage Owner" || role === "Garage Staff") {
+      list = list.filter(v => v.id === "v1" || v.id === "v2" || v.id === "v3");
+    } else if (role === "Freelance Mechanic") {
+      list = list.filter(v => v.id === "v1" || v.id === "v2");
+    } else if (role === "Spare Part Shop") {
+      const isGarageEnabled = userProfile.isMultiService && userProfile.activatedModules?.includes("Garage / Repair Shop Module");
+      if (isGarageEnabled) {
+        list = list.filter(v => v.id === "v1" || v.id === "v2");
+      } else {
+        list = [];
+      }
+    } else {
+      list = [];
+    }
+
+    // Second: Scoping by active_business_id (for business, garage, parts, etc.)
+    if (activeBusId && (role === "Garage Owner" || role === "Garage Staff" || role === "Spare Part Shop")) {
+      // Prioritize or limit if business matches
+    }
+
+    // Third: Scoping by active_vehicle_id if set (especially for Owner/Manager/Driver views)
+    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver")) {
+      // Ensure the selected active vehicle exists in the filtered list before restricting
+      const hasVehicle = list.some(v => v.id === activeVehId);
+      if (hasVehicle) {
+        list = list.filter(v => v.id === activeVehId);
+      }
+    }
+
+    return list;
+  }, [vehicles, userProfile]);
+
+  const filteredRecords = React.useMemo(() => {
+    if (!userProfile) return [];
+    const role = userProfile.active_role || userProfile.role;
+    const garageName = userProfile.businessName || "Angkor Speed Auto Repair";
+    const activeBusId = userProfile.active_business_id;
+    const activeVehId = userProfile.active_vehicle_id;
+    const filteredVehIds = filteredVehicles.map(v => v.id);
+
+    let list = records;
+
+    if (role === "Admin") {
+      // Admin has full view of all service records
+    } else if (role === "Garage Owner" || role === "Garage Staff") {
+      list = list.filter(r => 
+        r.provider?.toLowerCase().includes(garageName.toLowerCase()) || 
+        r.provider?.toLowerCase().includes("angkor") ||
+        (activeBusId && r.providerId === activeBusId) ||
+        filteredVehIds.includes(r.vehicleId)
+      );
+    } else {
+      list = list.filter(r => filteredVehIds.includes(r.vehicleId));
+    }
+
+    // Scope by active_vehicle_id context parameter if specified
+    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver")) {
+      list = list.filter(r => r.vehicleId === activeVehId);
+    }
+
+    // Scope by active_business_id if specified and role is a service provider
+    if (activeBusId && (role === "Garage Owner" || role === "Garage Staff")) {
+      const businessScoped = list.filter(r => r.providerId === activeBusId || r.provider?.toLowerCase().includes("angkor"));
+      if (businessScoped.length > 0) {
+        list = businessScoped;
+      }
+    }
+
+    return list;
+  }, [records, filteredVehicles, userProfile]);
+
+  // Keep selectedVehicle synchronized with filteredVehicles list
+  useEffect(() => {
+    if (filteredVehicles.length > 0) {
+      if (!selectedVehicle || !filteredVehicles.some(v => v.id === selectedVehicle.id)) {
+        setSelectedVehicle(filteredVehicles[0]);
+      }
+    } else {
+      setSelectedVehicle(null);
+    }
+  }, [filteredVehicles, selectedVehicle]);
   
   // Modals state
   const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
@@ -199,6 +312,7 @@ export default function App() {
   const [isDisconnected, setIsDisconnected] = useState<boolean>(false);
   const [isRetrying, setIsRetrying] = useState<boolean>(false);
   const [isSimulatedOffline, setIsSimulatedOffline] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
 
   // Offline Pending Service Logs Queue
   const [offlineQueue, setOfflineQueue] = useState<any[]>(() => {
@@ -258,22 +372,37 @@ export default function App() {
 
       if (profileRes.ok && vehiclesRes.ok && recordsRes.ok && garagesRes.ok) {
         setIsDisconnected(false);
-        
-        const profileData: UserProfile = await profileRes.json();
-        setUserProfile(profileData);
 
-        const vehiclesData: VehicleProfile[] = await vehiclesRes.json();
-        setVehicles(vehiclesData);
-        if (vehiclesData.length > 0) {
-          setSelectedVehicle(vehiclesData[0]);
+        const profileType = profileRes.headers.get("content-type");
+        const vehiclesType = vehiclesRes.headers.get("content-type");
+        const recordsType = recordsRes.headers.get("content-type");
+        const garagesType = garagesRes.headers.get("content-type");
+
+        if (
+          profileType && profileType.includes("application/json") &&
+          vehiclesType && vehiclesType.includes("application/json") &&
+          recordsType && recordsType.includes("application/json") &&
+          garagesType && garagesType.includes("application/json")
+        ) {
+          const profileData: UserProfile = await profileRes.json();
+          setUserProfile(profileData);
+
+          const vehiclesData: VehicleProfile[] = await vehiclesRes.json();
+          setVehicles(vehiclesData);
+          if (vehiclesData.length > 0) {
+            setSelectedVehicle(vehiclesData[0]);
+          }
+
+          const recordsData: MaintenanceRecord[] = await recordsRes.json();
+          // Merge any pending offline queue items
+          setRecords([...recordsData, ...offlineQueue]);
+
+          const garagesData: GaragePartner[] = await garagesRes.json();
+          setGarages(garagesData);
+        } else {
+          console.warn("One of the bootstrapped api responses did not return JSON format.");
+          setIsDisconnected(true);
         }
-
-        const recordsData: MaintenanceRecord[] = await recordsRes.json();
-        // Merge any pending offline queue items
-        setRecords([...recordsData, ...offlineQueue]);
-
-        const garagesData: GaragePartner[] = await garagesRes.json();
-        setGarages(garagesData);
       } else {
         setIsDisconnected(true);
       }
@@ -289,6 +418,16 @@ export default function App() {
   useEffect(() => {
     bootstrapData();
   }, [isSimulatedOffline]);
+
+  // Automatically trigger onboarding for new users if they have no vehicles
+  useEffect(() => {
+    if (!appLoading && vehicles.length === 0) {
+      const completed = localStorage.getItem("mycar_onboarding_completed");
+      if (!completed) {
+        setIsOnboardingOpen(true);
+      }
+    }
+  }, [appLoading, vehicles]);
 
   // Window network listener
   useEffect(() => {
@@ -344,28 +483,42 @@ export default function App() {
 
   // Handler: Refresh vehicles and maintenance records manually (e.g. after owner approves scan ticket)
   const handleRefreshAllDataFromServer = async () => {
+    if (isSimulatedOffline) {
+      console.warn("App is in simulated offline state. Refresh bypassed.");
+      return;
+    }
     try {
       const [vehiclesRes, recordsRes] = await Promise.all([
         fetch("/api/vehicles"),
         fetch("/api/maintenance")
       ]);
       if (vehiclesRes.ok) {
-        const vehiclesData = await vehiclesRes.json();
-        setVehicles(vehiclesData);
-        if (selectedVehicle) {
-          const matched = vehiclesData.find((v: any) => v.id === selectedVehicle.id);
-          if (matched) {
-            setSelectedVehicle(matched);
+        const contentType = vehiclesRes.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const vehiclesData = await vehiclesRes.json();
+          setVehicles(vehiclesData);
+          if (selectedVehicle) {
+            const matched = vehiclesData.find((v: any) => v.id === selectedVehicle.id);
+            if (matched) {
+              setSelectedVehicle(matched);
+            } else if (vehiclesData.length > 0) {
+              setSelectedVehicle(vehiclesData[0]);
+            }
           } else if (vehiclesData.length > 0) {
             setSelectedVehicle(vehiclesData[0]);
           }
-        } else if (vehiclesData.length > 0) {
-          setSelectedVehicle(vehiclesData[0]);
+        } else {
+          console.warn("Vehicles response content-type is not JSON", contentType);
         }
       }
       if (recordsRes.ok) {
-        const recordsData = await recordsRes.json();
-        setRecords([...recordsData, ...offlineQueue]);
+        const contentType = recordsRes.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const recordsData = await recordsRes.json();
+          setRecords([...recordsData, ...offlineQueue]);
+        } else {
+          console.warn("Maintenance response content-type is not JSON", contentType);
+        }
       }
     } catch (err) {
       console.error("Error refreshing global data streams:", err);
@@ -417,6 +570,130 @@ export default function App() {
       console.error(e);
     } finally {
       setAddVehicleLoading(false);
+    }
+  };
+
+  // Onboarding: Add vehicle
+  const handleOnboardingAddVehicle = async (veh: Partial<VehicleProfile>) => {
+    try {
+      if (isSimulatedOffline) {
+        // Local simulation fallback
+        const simulatedVeh: VehicleProfile = {
+          id: `v-${Date.now()}`,
+          brand: veh.brand || "Toyota",
+          model: veh.model || "Prius",
+          year: veh.year || 2012,
+          mileage: veh.mileage || 120000,
+          fuelType: (veh.fuelType as any) || "Hybrid",
+          plateNumber: veh.plateNumber || "2X-0000",
+          chassisNumber: "SIMULATED-CHASSIS-ONB",
+          notes: veh.notes || "Added locally during simulated offline onboarding.",
+          weaknessReport: {
+            commonIssues: [
+              {
+                issue: "Inverter Cooling System Saturation",
+                advice: "Clean inverter fan duct under rear seats every 15k km. Extremely high dust load in Phnom Penh.",
+                risk: "high"
+              },
+              {
+                issue: "Hybrid Battery Core Heat Stress",
+                advice: "Avoid direct sun exposure during Phnom Penh midday heat. Inverters degrade at 38°C + ambient temps.",
+                risk: "medium"
+              }
+            ],
+            maintenancePriority: ["Inverter Blower Cleaning", "Transaxle Fluid Refresh"],
+            strongPoints: ["Ultra fuel efficient for urban stop-and-go commuting", "Highly available local spare parts pricing"],
+            weakPoints: ["Sensitive to dust and thermal load under Cambodia climate", "Lower ground clearance during rainy season flooding"],
+            monthlyChecklist: ["Verify hybrid battery auxiliary air vent for blockages", "Check engine coolant level"],
+            longTripChecklist: ["Perform full scan on cooling pump", "Verify spare tire pressure"],
+            recommendedSchedule: [
+              { task: "Engine Oil & Filter change", interval: "5,000 km or 6 months" },
+              { task: "Hybrid cooling fan air filter check", interval: "10,000 km" }
+            ],
+            warningSigns: ["Red Master Warning Triangle on cluster display", "Slower acceleration under high outdoor temperatures"]
+          }
+        };
+        setVehicles(prev => [...prev, simulatedVeh]);
+        setSelectedVehicle(simulatedVeh);
+        return;
+      }
+
+      // Normal online path
+      const response = await fetch("/api/vehicles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brand: veh.brand,
+          model: veh.model,
+          year: veh.year,
+          mileage: veh.mileage,
+          fuelType: veh.fuelType,
+          plateNumber: veh.plateNumber,
+          notes: veh.notes
+        })
+      });
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const newVehicle: VehicleProfile = await response.json();
+          setVehicles(prev => [...prev, newVehicle]);
+          setSelectedVehicle(newVehicle);
+        }
+      }
+    } catch (e) {
+      console.error("Onboarding add vehicle failed:", e);
+    }
+  };
+
+  // Onboarding: Add Reminder
+  const handleOnboardingAddReminder = async (category: string, mileage: number, date: string, description: string) => {
+    if (!selectedVehicle) return;
+    try {
+      await fetch("/api/notifications/trigger-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventType: 'maintenance_due',
+          vehicleId: selectedVehicle.id,
+          customTitle: `⏰ Reminder Set: ${category}`,
+          customMessage: `Configured reminder for ${mileage} km or ${date}. Notes: ${description}`
+        })
+      });
+    } catch (err) {
+      console.error("Failed to add onboarding reminder:", err);
+    }
+  };
+
+  // Onboarding: Grant Coins
+  const handleOnboardingGrantCoins = (amount: number, reason: string) => {
+    try {
+      const savedTxNS = localStorage.getItem("care_coin_txns");
+      let txs: any[] = [];
+      if (savedTxNS) {
+        txs = JSON.parse(savedTxNS);
+      } else {
+        txs = [
+          { id: "tx-1", date: "2026-06-01", activity: "Account onboarding credit", category: "admin", coins: 10, status: "Completed" },
+          { id: "tx-2", date: "2026-06-02", activity: "Added Sokha Auto paint garage pin", category: "location", coins: 2, status: "Completed" },
+          { id: "tx-3", date: "2026-06-02", activity: "Helpful response in Toyota overheating topic", category: "forum", coins: 3, status: "Completed" },
+          { id: "tx-4", date: "2026-06-03", activity: "Bid deposit locked on Prius Inverter Fan", category: "bidding", coins: -10, status: "Locked" }
+        ];
+      }
+      
+      const newTx = {
+        id: `tx-onboarding-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        activity: `Onboarding: ${reason}`,
+        category: "admin",
+        coins: amount,
+        status: "Completed"
+      };
+
+      txs.unshift(newTx);
+      localStorage.setItem("care_coin_txns", JSON.stringify(txs));
+      localStorage.setItem("mycar_onboarding_completed", "true");
+    } catch (e) {
+      console.error("Failed to reward coins:", e);
     }
   };
 
@@ -752,91 +1029,105 @@ export default function App() {
     }
 
     const baseItems = (() => {
-      switch (userProfile?.role) {
+      const activeRole = userProfile?.active_role || userProfile?.role || "Vehicle Owner";
+      switch (activeRole) {
         case "Vehicle Owner":
           return [
-            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "fleet_manager", label: "★ Fleet & Family Manager", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
+            { id: "dashboard", label: "My Vehicles & Logs", icon: <Car className="w-4 h-4 text-sky-400" /> },
             { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
+            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
+            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
+            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
+            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "fix_my_car_bidding", label: "Fix My Car Requests", icon: <Wrench className="w-4 h-4 text-emerald-400" /> },
+            { id: "coins", label: "Care Coin Donation & Rewards", icon: <Coins className="w-4 h-4 text-amber-400" /> },
             { 
               id: "tools", 
-              label: "Tools", 
+              label: "AI Tools", 
               icon: <Wrench className="w-4 h-4 text-indigo-400" />,
               isGroup: true,
               subItems: [
                 { id: "dream-car-advisor", label: "Can I Afford This Car?", icon: <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" /> },
-                { id: "ai-chat", label: "AI System Checker", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
+                { id: "ai-chat", label: "AI Checker", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
                 { id: "reports", label: "AI Weak Report", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> },
               ]
-            },
-            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
-            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
-            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
+            }
           ];
         case "Vehicle Manager":
           return [
             { id: "fleet_manager", label: "★ Fleet Dashboard", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
-            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
-            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
-            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
+            { id: "dashboard", label: "Managed Vehicles", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "alarms", label: "Service Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
+            { id: "role_forms", label: "Driver Assignment", icon: <UserCheck className="w-4 h-4 text-indigo-400" /> },
+            { id: "coins", label: "Fleet Expenses", icon: <Coins className="w-4 h-4 text-amber-400" /> },
+            { id: "quick_service_workspace", label: "Vehicle Availability", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
+            { id: "reports", label: "Issue Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
           ];
-        case "Driver / Staff":
+        case "Driver":
           return [
             { id: "fleet_manager", label: "★ Driver Console", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "dashboard", label: "Assigned Vehicle", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "coins", label: "Fuel & Charge Logs", icon: <Coins className="w-4 h-4 text-amber-400" /> },
+            { id: "quick_service_workspace", label: "Odometer Update", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
+            { id: "role_forms", label: "Trip Notes & Report", icon: <Wrench className="w-4 h-4 text-red-400" /> }
           ];
         case "Garage Owner":
           return [
-            { id: "parts_control", label: "Business Workstation", icon: <Wrench className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "ai-chat", label: "Diagnostics Expert AI", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
-            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-500" /> },
-            { id: "garages", label: "My Public Locator", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "forum", label: "Customer Helpline Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+            { id: "parts_control", label: "Garage Dashboard", icon: <Wrench className="w-4 h-4 text-emerald-400 animate-pulse" /> },
+            { id: "quick_service_workspace", label: "Service Jobs", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
+            { id: "partner_portal", label: "Scan Vehicle QR", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
+            { id: "dashboard", label: "Customer Vehicles", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "fix_my_car_bidding", label: "Pending Approvals", icon: <Wrench className="w-4 h-4 text-rose-450 animate-pulse" /> },
+            { id: "role_forms", label: "Staff & Mini POS", icon: <Sliders className="w-4 h-4 text-purple-400" /> },
+            { id: "reports", label: "Business Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
           ];
-        case "Petrol Station Partner":
+        case "Garage Staff":
           return [
-            { id: "station_control", label: "Fuel Dispensation Desk", icon: <Fuel className="w-4 h-4 text-amber-400" /> },
-            { id: "garages", label: "Locate Partner Outlets", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "forum", label: "Fuel Quality Q&A Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+            { id: "parts_control", label: "Staff Dashboard", icon: <Wrench className="w-4 h-4 text-emerald-400" /> },
+            { id: "quick_service_workspace", label: "Receptionist & Jobs", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
+            { id: "partner_portal", label: "Scan Vehicle QR", icon: <QrCode className="w-4 h-4 text-indigo-400" /> }
           ];
         case "Spare Part Shop":
           return [
-            { id: "parts_control", label: "Business Workstation", icon: <Sliders className="w-4 h-4 text-indigo-400" /> },
-            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-500" /> },
-            { id: "ai-chat", label: "Fitment Solver AI", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
-            { id: "forum", label: "Part Requests Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+            { id: "parts_control", label: "Spare Parts Dashboard", icon: <Tag className="w-4 h-4 text-amber-400 animate-pulse" /> },
+            { id: "classifieds", label: "Marketplace Posts", icon: <Tag className="w-4 h-4 text-yellow-450" /> },
+            { id: "quick_service_workspace", label: "Inventory & Orders", icon: <Sliders className="w-4 h-4 text-indigo-400" /> },
+            { id: "reports", label: "Low Stock Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
           ];
-        case "Admin":
+        case "Petrol Station Partner":
           return [
-            { id: "admin", label: "Operations Admin Panel", icon: <Terminal className="w-4 h-4 text-sky-400" /> },
-            { id: "dashboard", label: "All Vehicles Database", icon: <Car className="w-4 h-4 text-slate-400" /> },
-            { id: "forum", label: "Forum Discussions Mod", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+            { id: "station_control", label: "Petrol Station Dashboard", icon: <Fuel className="w-4 h-4 text-amber-400" /> },
+            { id: "garages", label: "Location Map", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "classifieds", label: "Promotions & Reviews", icon: <Tag className="w-4 h-4 text-sky-400" /> }
+          ];
+        case "EV Charging Station Partner":
+          return [
+            { id: "ev_station_control", label: "EV Charging Dashboard", icon: <Zap className="w-4 h-4 text-emerald-400" /> },
+            { id: "garages", label: "Location Map", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "classifieds", label: "Charging Pricing Info", icon: <Tag className="w-4 h-4 text-sky-400" /> }
           ];
         case "Freelance Mechanic":
           return [
-            { id: "freelance_control", label: "Highway Distress Alerts", icon: <Zap className="w-4 h-4 text-rose-400 animate-pulse" /> },
-            { id: "ai-chat", label: "Diagnostics Codes Database", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
-            { id: "forum", label: "Assistance Tips Board", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+            { id: "freelance_control", label: "Mechanic Dashboard", icon: <Zap className="w-4 h-4 text-rose-450 animate-pulse" /> },
+            { id: "fix_my_car_bidding", label: "Distress Alerts & Bids", icon: <Wrench className="w-4 h-4 text-emerald-450" /> },
+            { id: "forum", label: "Assistance Tips Board", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> }
+          ];
+        case "Admin":
+          return [
+            { id: "admin", label: "Admin Panel", icon: <Terminal className="w-4 h-4 text-sky-400 animate-pulse" /> },
+            { id: "dashboard", label: "Vehicles Database", icon: <Car className="w-4 h-4 text-slate-400" /> },
+            { id: "forum", label: "Forum Moderation", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> }
           ];
         default:
           return [
-            { id: "dashboard", label: "Home Odometer", icon: <Car className="w-4 h-4 text-sky-400" /> }
+            { id: "dashboard", label: "My Vehicles & Logs", icon: <Car className="w-4 h-4 text-sky-400" /> }
           ];
       }
     })();
 
     return [
-      { id: "role_forms", label: "Unified Form System", icon: <Sliders className="w-4 h-4 text-sky-400 animate-pulse" /> },
-      ...baseItems,
-      { id: "fix_my_car_bidding", label: "Fix My Car Requests", icon: <Wrench className="w-4 h-4 text-emerald-450 text-emerald-400 animate-pulse" /> },
-      { id: "coins", label: "Care Coin Donation & Rewards", icon: <Coins className="w-4 h-4 text-amber-400 animate-pulse" /> },
-      { id: "vehicle_powertrains", label: "My Vehicle", icon: <Sliders className="w-4 h-4 text-pink-450 text-pink-400 animate-pulse" /> },
-      { id: "quick_service_workspace", label: "Quick Service Workspace", icon: <Sliders className="w-4 h-4 text-emerald-450 text-emerald-400 animate-pulse" /> }
+      { id: "role_switcher", label: "Unified Persona Control", icon: <UserCheck className="w-4 h-4 text-sky-400 animate-pulse" /> },
+      ...baseItems
     ];
   };
 
@@ -861,9 +1152,9 @@ export default function App() {
           </div>
         </div>
 
-        {/* User Identity Indicator */}
+        {/* User Identity Indicator - Desktop Mode */}
         {userProfile && (
-          <div className="flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-3">
             {/* Dynamic Offline / Online Connectivity Indicator */}
             {isDisconnected ? (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs select-none">
@@ -999,6 +1290,15 @@ export default function App() {
             )}
 
             <button
+              onClick={() => setIsOnboardingOpen(true)}
+              className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
+              title="Launch interactive onboarding setup flow and get +10 Care Coins"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>🧭 Setup Guide & Coins</span>
+            </button>
+
+            <button
               onClick={() => setIsLoggedIn(false)}
               className="px-3.5 py-2 hover:bg-white/5 border border-white/10 hover:border-slate-500/30 text-slate-350 hover:text-white transition rounded-xl text-xs font-bold leading-tight flex items-center gap-1.5 cursor-pointer"
               title="Click to change active role persona and re-trigger landing setup logs"
@@ -1026,12 +1326,135 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* User Identity Indicator - Mobile / Tablet Mode */}
+        {userProfile && (
+          <div className="flex lg:hidden items-center gap-2">
+            {/* Minimal Offline queue status indicator */}
+            {offlineQueue.length > 0 && (
+              <button
+                onClick={() => setShowOfflineQueuePopover(!showOfflineQueuePopover)}
+                className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-xl relative hover:bg-amber-500/20 transition cursor-pointer"
+              >
+                <Wrench className="w-4 h-4 animate-spin" style={{ animationDuration: '6s' }} />
+                <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black flex items-center justify-center">
+                  {offlineQueue.length}
+                </span>
+              </button>
+            )}
+
+            {userProfile?.role === "Vehicle Owner" && (
+              <button
+                onClick={() => {
+                  setActiveTab("fix_my_car_bidding");
+                  setIsMobileMenuOpen(false);
+                }}
+                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase rounded-lg transition flex items-center gap-1 cursor-pointer animate-pulse"
+                title="Emergency SOS dispatch Help Request"
+              >
+                <AlertTriangle className="w-3 h-3" />
+                <span>SOS</span>
+              </button>
+            )}
+
+            {/* Hamburger Mobile Menu Toggle Button */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2.5 bg-white/5 border border-white/10 text-slate-200 hover:text-white rounded-xl transition cursor-pointer"
+              aria-label="Toggle Navigation Menu"
+            >
+              {isMobileMenuOpen ? (
+                <X className="w-4.5 h-4.5 text-sky-400" />
+              ) : (
+                <Menu className="w-4.5 h-4.5 text-slate-200" />
+              )}
+            </button>
+          </div>
+        )}
       </header>
 
       {/* -------------------- CORE CONTENT GRID -------------------- */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Navigation Sidebar Panel */}
-        <nav className="lg:col-span-3 glass rounded-3xl p-5 space-y-2 select-none">
+        <nav className={`${isMobileMenuOpen ? "block" : "hidden"} lg:block lg:col-span-3 glass rounded-3xl p-5 space-y-2 select-none`}>
+          {/* Mobile Profile & Quick Actions Section */}
+          {userProfile && (
+            <div className="block lg:hidden space-y-3 pb-4 border-b border-white/10 mb-4">
+              <div 
+                onClick={() => {
+                  setShowSettingsModal(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="px-4 py-2.5 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-2.5 cursor-pointer hover:bg-white/10 transition"
+              >
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-slate-200 block truncate leading-tight">{userProfile.name}</span>
+                  <span className="text-[10px] text-slate-500 block truncate">{userProfile.location} • {userProfile.role}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    setIsOnboardingOpen(true);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>Guide & Coins</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsLoggedIn(false);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="py-2.5 px-3 bg-white/5 border border-white/10 text-slate-300 hover:text-white font-bold text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Change Role</span>
+                </button>
+              </div>
+
+              {/* Dynamic Connection Monitor */}
+              <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-white/5 rounded-xl text-xs">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider pl-1">Status:</span>
+                {isDisconnected ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-rose-400 font-bold text-[10px] flex items-center gap-1 select-none">
+                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 block animate-ping"></span>
+                      Offline
+                    </span>
+                    <span className="text-slate-700">|</span>
+                    <button 
+                      onClick={handleRetryLastAction}
+                      disabled={isRetrying}
+                      className="text-sky-400 font-bold text-[10px] hover:underline cursor-pointer flex items-center gap-0.5"
+                    >
+                      {isRetrying ? '...' : 'Retry'}
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => {
+                      setIsSimulatedOffline(true);
+                      setIsDisconnected(true);
+                    }}
+                    className="text-emerald-400 font-semibold text-[10px] flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/10 cursor-pointer"
+                    title="Click to simulate offline mode"
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 block"></span>
+                    Online (Connected)
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-3 mb-2">My functions ({userProfile?.role})</span>
           
           {getNavItems().map((item: any) => {
@@ -1071,6 +1494,7 @@ export default function App() {
                               setActiveTab(subItem.id);
                               setSearchCategory("");
                               setForumPreFilledCategory("");
+                              setIsMobileMenuOpen(false);
                             }}
                             className={`w-full p-2.5 rounded-xl text-left font-semibold text-xs flex items-center gap-2.5 transition border cursor-pointer ${
                               isActive
@@ -1093,7 +1517,12 @@ export default function App() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => { setActiveTab(item.id); setSearchCategory(""); setForumPreFilledCategory(""); }}
+                onClick={() => { 
+                  setActiveTab(item.id); 
+                  setSearchCategory(""); 
+                  setForumPreFilledCategory(""); 
+                  setIsMobileMenuOpen(false);
+                }}
                 className={`w-full p-3.5 rounded-2xl text-left font-semibold text-xs flex items-center justify-between transition border cursor-pointer ${
                   activeTab === item.id
                     ? "bg-white/10 text-white border-white/15 shadow-sm"
@@ -1109,7 +1538,7 @@ export default function App() {
             );
           })}
 
-          {/* QR Code Feature Guide (Matches .lg:col-span-3 .glass:first-of-type) */}
+          {/* QR Code Feature Guide */}
           <div className="pt-4">
             <div className="glass rounded-2xl p-4 space-y-2.5 border border-white/5 bg-white/5">
               <h4 className="text-[11px] font-bold text-slate-300 tracking-wide uppercase flex items-center gap-1.5">
@@ -1130,7 +1559,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Phnom Penh Fuel Prices & Hazard Reporter (Matches .lg:col-span-3 .glass:last-of-type) */}
+          {/* Phnom Penh Fuel Prices & Hazard Reporter */}
           <div className="pt-4">
             <div className="glass rounded-2xl p-4 space-y-3 border border-white/5 bg-white/5">
               <div className="flex items-center justify-between">
@@ -1158,6 +1587,7 @@ export default function App() {
                   onClick={() => {
                     setForumPreFilledCategory("Monsoon / Water Drainage damage");
                     setActiveTab("forum");
+                    setIsMobileMenuOpen(false);
                   }}
                   className="w-full text-left py-2 px-2.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/25 border border-orange-500/20 text-orange-450 text-orange-400 hover:text-orange-300 transition text-[10px] font-bold flex items-center justify-between cursor-pointer group"
                   title="Report unpaved street flooding or structural drainage issues directly to the Help Forum"
@@ -1196,13 +1626,62 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'role_switcher' && userProfile && (
+                <RoleSwitcher 
+                  userProfile={userProfile}
+                  vehicles={vehicles}
+                  onRoleChanged={(newProfile) => {
+                    // Clear the previous cache to prevent showing stale role-scoped data
+                    setVehicles([]);
+                    setRecords([]);
+                    setUserProfile(newProfile);
+                    // Re-bootstrap user dashboard data specifically scoped to their new role's permissions
+                    bootstrapData();
+
+                    const activeRole = newProfile.active_role || newProfile.role;
+                    switch (activeRole) {
+                      case "Vehicle Owner":
+                        setActiveTab("dashboard");
+                        break;
+                      case "Vehicle Manager":
+                        setActiveTab("fleet_manager");
+                        break;
+                      case "Driver":
+                        setActiveTab("fleet_manager"); // Driver Console
+                        break;
+                      case "Garage Owner":
+                      case "Garage Staff":
+                        setActiveTab("parts_control"); // Business Workstation
+                        break;
+                      case "Petrol Station Partner":
+                        setActiveTab("station_control");
+                        break;
+                      case "EV Charging Station Partner":
+                        setActiveTab("ev_station_control");
+                        break;
+                      case "Spare Part Shop":
+                        setActiveTab("parts_control");
+                        break;
+                      case "Admin":
+                        setActiveTab("admin");
+                        break;
+                      case "Freelance Mechanic":
+                        setActiveTab("freelance_control");
+                        break;
+                      default:
+                        setActiveTab("dashboard");
+                    }
+                  }}
+                />
+              )}
+
               {activeTab === 'dashboard' && (
                 <Dashboard
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   onAddVehicle={() => setShowAddVehicleModal(true)}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   selectedVehicle={selectedVehicle}
-                  records={records}
+                  records={filteredRecords}
                   onDeleteVehicle={(id) => handleDeleteVehicle(id)}
                   onAddRecord={() => {
                     if (selectedVehicle) {
@@ -1221,11 +1700,12 @@ export default function App() {
               {activeTab === 'fleet_manager' && (
                 <FleetManager 
                   userProfile={userProfile} 
-                  appVehicles={vehicles}
+                  appVehicles={filteredVehicles}
                   setAppVehicles={setVehicles}
-                  appRecords={records}
+                  appRecords={filteredRecords}
                   setAppRecords={setRecords}
                   onRefreshData={handleRefreshAllDataFromServer}
+                  isSimulatedOffline={isSimulatedOffline}
                 />
               )}
 
@@ -1233,8 +1713,8 @@ export default function App() {
               {activeTab === 'garage_control' && (
                 <GarageDashboard 
                   userProfile={userProfile}
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   onLogRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1248,12 +1728,20 @@ export default function App() {
                 />
               )}
 
+              {/* Role specific: EV Station monitoring console */}
+              {activeTab === 'ev_station_control' && (
+                <EvStationDashboard 
+                  userProfile={userProfile}
+                  onRefreshData={handleRefreshAllDataFromServer}
+                />
+              )}
+
               {/* Role specific: Combined Multi-Service Business Workstation */}
               {activeTab === 'parts_control' && (
                 <PartsDashboard 
                   userProfile={userProfile}
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   onLogRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1269,10 +1757,10 @@ export default function App() {
 
               {activeTab === 'alarms' && (
                 <RemindersPanel
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
-                  records={records}
+                  records={filteredRecords}
                 />
               )}
 
@@ -1282,15 +1770,16 @@ export default function App() {
 
               {activeTab === 'ai-chat' && (
                 <AICareAssistant
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
+                  records={filteredRecords}
                   onNavigateToGarages={(servCat) => handleDiagnosisFocusTransition(servCat)}
                 />
               )}
 
               {activeTab === 'reports' && (
                 <VehicleReportCard
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                 />
@@ -1298,18 +1787,19 @@ export default function App() {
 
               {activeTab === 'garages' && (
                 <MyCarCareMap
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   activeUser={userProfile}
                   onRefreshData={handleRefreshAllDataFromServer}
                   onLogRecordExternal={handleLogRecordExternal}
                   onNavigateTab={(tabName) => setActiveTab(tabName)}
+                  selectedVehicle={selectedVehicle}
                 />
               )}
 
               {activeTab === 'partner_portal' && (
                 <PartnerPortal
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   onRefreshData={handleRefreshAllDataFromServer}
@@ -1319,15 +1809,15 @@ export default function App() {
 
               {activeTab === 'admin' && (
                 <AdminPanel
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   garages={garages}
                 />
               )}
 
               {activeTab === 'forum' && (
                 <HelpForum
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
                   onRefreshData={handleRefreshAllDataFromServer}
                   initialCategory={forumPreFilledCategory}
@@ -1337,7 +1827,7 @@ export default function App() {
 
               {activeTab === 'classifieds' && (
                 <ClassifiedsMarketplace
-                  vehicles={vehicles}
+                  vehicles={filteredVehicles}
                   selectedVehicle={selectedVehicle}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1346,24 +1836,24 @@ export default function App() {
               {activeTab === 'role_forms' && (
                 <RoleBasedFormSystem
                   userProfile={userProfile}
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
               )}
 
               {activeTab === 'vehicle_powertrains' && (
                 <VehicleRegistrationSystem
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
               )}
 
               {activeTab === 'quick_service_workspace' && (
                 <QuickServiceLogSystem
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   activeVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   onAddRecord={handleLogRecordExternal}
@@ -1373,8 +1863,8 @@ export default function App() {
 
               {activeTab === 'coins' && (
                 <MyCarCareCoinSystem
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   activeUser={userProfile}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1383,8 +1873,8 @@ export default function App() {
               {activeTab === 'fix_my_car_bidding' && userProfile && (
                 <FixMyCarBiddingModule
                   userProfile={userProfile}
-                  vehicles={vehicles}
-                  records={records}
+                  vehicles={filteredVehicles}
+                  records={filteredRecords}
                   onAddRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1690,7 +2180,21 @@ export default function App() {
                   <label className="text-[10px] font-bold text-slate-500 uppercase block">Active Role</label>
                   <select
                     value={userProfile.role}
-                    onChange={(e) => setUserProfile({ ...userProfile, role: e.target.value as any })}
+                    onChange={async (e) => {
+                      const nextRole = e.target.value as any;
+                      const nextProfile = { ...userProfile, role: nextRole };
+                      setUserProfile(nextProfile);
+                      try {
+                        await fetch("/api/profile", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(nextProfile)
+                        });
+                        await bootstrapData();
+                      } catch (err) {
+                        console.error("Failed to update profile role on server:", err);
+                      }
+                    }}
                     className="w-full bg-slate-900 border border-white/10 p-2 px-3 text-xs rounded-xl focus:outline-none text-slate-100"
                   >
                     <option value="Vehicle Owner" className="bg-slate-900">Vehicle Owner</option>
@@ -1698,6 +2202,7 @@ export default function App() {
                     <option value="Driver / Staff" className="bg-slate-900">Driver / Staff</option>
                     <option value="Garage Owner" className="bg-slate-900">Garage Owner</option>
                     <option value="Petrol Station Partner" className="bg-slate-900">Petrol Station Partner</option>
+                    <option value="EV Charging Station Partner" className="bg-slate-900">EV Charging Station Partner</option>
                     <option value="Spare Part Shop" className="bg-slate-900">Spare Part Shop</option>
                     <option value="Admin" className="bg-slate-900">Admin</option>
                     <option value="Freelance Mechanic" className="bg-slate-900">Freelance Mechanic</option>
@@ -1775,7 +2280,19 @@ export default function App() {
               </p>
 
               <button
-                onClick={() => setShowSettingsModal(false)}
+                onClick={async () => {
+                  try {
+                    await fetch("/api/profile", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(userProfile)
+                    });
+                    await bootstrapData();
+                  } catch (err) {
+                    console.error("Failed to save profile on server:", err);
+                  }
+                  setShowSettingsModal(false);
+                }}
                 className="w-full py-2.5 bg-sky-500 hover:bg-sky-600 active:bg-sky-700 text-slate-900 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
               >
                 <Check className="w-4 h-4" />
@@ -1793,6 +2310,15 @@ export default function App() {
           Disclaimer: AI diagnosis answers provide educational guidelines. High-voltage EV systems, complex brake machining, and suspension upgrades should only be executed by accredited professional mechanics.
         </p>
       </footer>
+
+      {/* User Onboarding Tour Component */}
+      <UserOnboardingTour
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onAddVehicle={handleOnboardingAddVehicle}
+        onAddReminder={handleOnboardingAddReminder}
+        onGrantCoins={handleOnboardingGrantCoins}
+      />
     </div>
   );
 }

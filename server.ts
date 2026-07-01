@@ -70,7 +70,13 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 12 345 678",
     role: "Vehicle Owner",
     location: "Phnom Penh",
-    status: "Approved"
+    status: "Approved",
+    active_role: "Vehicle Owner",
+    active_vehicle_id: "v1",
+    active_business_id: "biz-123",
+    active_module: "garage",
+    permission_group: "Garage Manager",
+    user_roles: ["Vehicle Owner", "Vehicle Manager", "Driver", "Garage Owner", "Spare Part Shop", "Admin"]
   },
   {
     id: 2,
@@ -81,7 +87,12 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Siem Reap",
     status: "Pending",
     businessName: "Angkor Speed Auto Repair",
-    licenseNumber: "Co-8271/2026-KH"
+    licenseNumber: "Co-8271/2026-KH",
+    active_role: "Garage Owner",
+    active_business_id: "biz-456",
+    active_module: "garage",
+    permission_group: "Garage Manager",
+    user_roles: ["Garage Owner", "Garage Staff", "Spare Part Shop", "Freelance Mechanic"]
   },
   {
     id: 3,
@@ -92,7 +103,11 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Pending",
     businessName: "TotalEnergies Sothearos Blvd",
-    licenseNumber: "Co-6211/2026-KH"
+    licenseNumber: "Co-6211/2026-KH",
+    active_role: "Petrol Station Partner",
+    active_business_id: "biz-789",
+    active_module: "petrol_station",
+    user_roles: ["Petrol Station Partner", "EV Charging Station Partner"]
   },
   {
     id: 4,
@@ -103,7 +118,11 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Sihanoukville",
     status: "Approved",
     businessName: "Sihanoukville Toyota Parts",
-    licenseNumber: "Co-1934/2026-KH"
+    licenseNumber: "Co-1934/2026-KH",
+    active_role: "Spare Part Shop",
+    active_business_id: "biz-123",
+    active_module: "spare_part_shop",
+    user_roles: ["Spare Part Shop"]
   },
   {
     id: 5,
@@ -114,7 +133,10 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Battambang",
     status: "Pending",
     businessName: "Sokna Express Towing",
-    licenseNumber: "Co-4188/2026-KH"
+    licenseNumber: "Co-4188/2026-KH",
+    active_role: "Freelance Mechanic",
+    active_business_id: "biz-123",
+    user_roles: ["Freelance Mechanic"]
   },
   {
     id: 6,
@@ -125,7 +147,10 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Suspended",
     businessName: "Phnom Penh Mobile Repair",
-    licenseNumber: "Co-4819/2026-KH"
+    licenseNumber: "Co-4819/2026-KH",
+    active_role: "Freelance Mechanic",
+    active_business_id: "biz-123",
+    user_roles: ["Freelance Mechanic"]
   },
   {
     id: 7,
@@ -134,7 +159,9 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 23 888 888",
     role: "Admin",
     location: "Phnom Penh",
-    status: "Approved"
+    status: "Approved",
+    active_role: "Admin",
+    user_roles: ["Admin"]
   }
 ];
 
@@ -3123,7 +3150,25 @@ app.get("/api/profile", async (req: Request, res: Response) => {
 
 // Update User Profile / Onboard / Switch Login
 app.put("/api/profile", async (req: Request, res: Response) => {
-  const { name, email, phone, role, location, businessName, licenseNumber, status, activatedModules, isMultiService } = req.body;
+  const { 
+    name, 
+    email, 
+    phone, 
+    role, 
+    location, 
+    businessName, 
+    licenseNumber, 
+    status, 
+    activatedModules, 
+    isMultiService,
+    active_role,
+    active_vehicle_id,
+    active_business_id,
+    active_module,
+    permission_group,
+    user_roles
+  } = req.body;
+  
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
   }
@@ -3141,25 +3186,75 @@ app.put("/api/profile", async (req: Request, res: Response) => {
       status: status || defaultStatus
     });
 
+    activeProfile = {
+      ...activeProfile,
+      name,
+      email,
+      phone: phone || '',
+      role,
+      location: location || 'Phnom Penh',
+      status: status || defaultStatus,
+      businessName: businessName || undefined,
+      licenseNumber: licenseNumber || undefined,
+      activatedModules: activatedModules || undefined,
+      isMultiService: isMultiService || undefined,
+      active_role: active_role || role,
+      active_vehicle_id: active_vehicle_id || undefined,
+      active_business_id: active_business_id || undefined,
+      active_module: active_module || undefined,
+      permission_group: permission_group || undefined,
+      user_roles: user_roles || undefined
+    };
+
     if (dbUser) {
-      activeProfile = {
-        id: dbUser.id,
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: dbUser.phone || '',
-        role: dbUser.role as any,
-        location: dbUser.location || 'Phnom Penh',
-        status: dbUser.status as any,
-        businessName: dbUser.businessName || undefined,
-        licenseNumber: dbUser.licenseNumber || undefined,
-        activatedModules: activatedModules || undefined,
-        isMultiService: isMultiService || undefined
+      activeProfile.id = dbUser.id;
+    }
+    
+    // Also sync the simulated user in the database list
+    const simIdx = simulatedUsersDatabase.findIndex(u => u.email === email);
+    if (simIdx !== -1) {
+      simulatedUsersDatabase[simIdx] = {
+        ...simulatedUsersDatabase[simIdx],
+        ...activeProfile
       };
     }
+
     res.json(activeProfile);
   } catch (err) {
     console.error("Error updates profile in Cloud SQL:", err);
     res.status(500).json({ error: "Cloud SQL sync fail" });
+  }
+});
+
+// Update specific active role, vehicle, and business preferences
+app.put("/api/profile/preferences", async (req: Request, res: Response) => {
+  const { active_role, active_vehicle_id, active_business_id } = req.body;
+
+  if (!activeProfile) {
+    return res.status(401).json({ error: "No active profile found. Please login first." });
+  }
+
+  try {
+    activeProfile = {
+      ...activeProfile,
+      active_role: active_role || activeProfile.active_role || activeProfile.role,
+      active_vehicle_id: active_vehicle_id !== undefined ? active_vehicle_id : activeProfile.active_vehicle_id,
+      active_business_id: active_business_id !== undefined ? active_business_id : activeProfile.active_business_id
+    };
+
+    // Synchronize to the simulated database array
+    const simIdx = simulatedUsersDatabase.findIndex(u => u.email === activeProfile.email);
+    if (simIdx !== -1) {
+      simulatedUsersDatabase[simIdx] = {
+        ...simulatedUsersDatabase[simIdx],
+        ...activeProfile
+      };
+    }
+
+    res.json(activeProfile);
+  } catch (err) {
+    console.error("Error updating preferences:", err);
+    res.status(500).json({ error: "Failed to update active preferences" });
   }
 });
 
@@ -6816,18 +6911,29 @@ app.post("/api/gemini/generate", async (req: Request, res: Response) => {
 
 // Feature 1: AI Vehicle Care Symptom Checker
 app.post("/api/ai/diagnosis", async (req: Request, res: Response) => {
-  const { vehicleId, symptom, language } = req.body;
+  const { vehicleId, symptom, language, vehicle: reqVehicle } = req.body;
   if (!symptom) {
     return res.status(400).json({ error: "Please enter your symptoms to diagnose." });
   }
 
-  const vehicle = vehicles.find(v => v.id === vehicleId);
-  const brandStr = vehicle ? `${vehicle.brand} ${vehicle.model} ${vehicle.year}` : "Generic Vehicle";
+  const vehicle = reqVehicle || vehicles.find(v => v.id === vehicleId);
+  const brandStr = vehicle ? `${vehicle.brand} ${vehicle.model}` : "Generic Vehicle";
+  const year = vehicle ? vehicle.year : "Unknown Year";
   const fuel = vehicle ? vehicle.fuelType : "Gasoline";
   const mileageKm = vehicle ? vehicle.mileage : 120000;
+  const lastServiceDate = vehicle ? (vehicle.lastServiceDate || "No service history recorded") : "No service history recorded";
+  const lastOilChangeMileage = vehicle ? (vehicle.lastOilChangeMileage || "No oil change history") : "No oil change history";
 
-  const engineType = vehicle ? (vehicle.engineTypeNew || "") : "";
+  const engineType = vehicle ? (vehicle.engineTypeNew || vehicle.engineType || "") : "";
   const fuelEnergyType = vehicle ? (vehicle.fuelEnergyType || "") : "";
+  const transmission = vehicle ? (vehicle.transmission || "Automatic") : "Automatic";
+  const plateNumber = vehicle ? (vehicle.plateNumber || "N/A") : "N/A";
+  const notes = vehicle ? (vehicle.notes || "None") : "None";
+
+  const evBatteryCapacity = vehicle && vehicle.evBatteryCapacity ? `${vehicle.evBatteryCapacity} kWh` : "N/A";
+  const evBatteryHealth = vehicle && vehicle.evBatteryHealth ? `${vehicle.evBatteryHealth}%` : "N/A";
+  const hybridBatteryHealth = vehicle && vehicle.hybridBatteryHealth ? `${vehicle.hybridBatteryHealth}%` : "N/A";
+
   const isEv = vehicle ? (vehicle.engineTypeNew === "electric" || vehicle.fuelEnergyType === "electric" || fuel.toLowerCase() === "ev") : false;
   const isHybrid = vehicle ? (vehicle.engineTypeNew === "hybrid" || vehicle.engineTypeNew === "plug-in hybrid" || fuel.toLowerCase() === "hybrid") : false;
   const isDiesel = vehicle ? (vehicle.engineTypeNew === "diesel" || fuel.toLowerCase() === "diesel") : false;
@@ -6836,25 +6942,41 @@ app.post("/api/ai/diagnosis", async (req: Request, res: Response) => {
 
   if (client) {
     try {
-      console.log(`Diagnosing symptoms with Gemini: "${symptom}" for ${brandStr}`);
+      console.log(`Diagnosing symptoms with Gemini: "${symptom}" for ${brandStr} (Year: ${year}, Fuel: ${fuel}, Last Service: ${lastServiceDate})`);
       const prompt = `You are MyCar Care KH AI Assistant, a vehicle maintenance supervisor and diagnostics counselor for Cambodia.
 
-Analyze following symptoms:
-Vehicle: ${brandStr}
-Fuel Type: ${fuel}
-Engine Type: ${engineType}
-Fuel Energy Type: ${fuelEnergyType}
-Mileage: ${mileageKm} km
-Symptom: "${symptom}"
-Cambodian Driving Conditions: Extreme heat, traffic gridlock, dust, rainy season water wading/floods.
+Analyze the following symptoms with strict attention to the selected vehicle's full profile:
 
-Determine safe driving suggestions and possible issues.
+=== VEHICLE FULL PROFILE ===
+- Brand & Model: ${brandStr}
+- Production Year: ${year}
+- Fuel Type: ${fuel}
+- Engine Type/Specs: ${engineType}
+- Fuel Energy Type: ${fuelEnergyType}
+- Current Mileage: ${mileageKm} km
+- Last Service Date: ${lastServiceDate}
+- Last Oil Change Mileage: ${lastOilChangeMileage}
+- Transmission: ${transmission}
+- License Plate: ${plateNumber}
+- Owner Notes/Context: ${notes}
+- EV Battery Capacity: ${evBatteryCapacity}
+- EV Battery Health: ${evBatteryHealth}
+- Hybrid Battery Health: ${hybridBatteryHealth}
+============================
+
+Symptom described by driver: "${symptom}"
+
+Cambodian Driving Conditions: Extreme heat, traffic gridlock, high dust levels, heavy monsoon rain with street water wading/floods.
+
+Analyze the symptom and provide customized diagnostics, safe driving advice, and recommendations. Filter your advice SPECIFICALLY based on the vehicle type, age, mileage, engine technology, fuel chemistry, and service timeline above.
 
 COMPATIBILITY RULES:
-- The vehicle has specific attributes: IS_EV = ${isEv}, IS_HYBRID = ${isHybrid}, IS_DIESEL = ${isDiesel}.
 - Since IS_EV is ${isEv}, you MUST NOT recommend any combustion features like engine oil, spark plugs, oil filters, transmission belts, or fuel system repairs if it is a pure EV (IS_EV = true).
-- Since IS_DIESEL is ${isDiesel}, recommend diesel-specific filters, oil, and DPF checks if relevant.
-- Avoid any irrelevant platform recommendations (e.g. do not give EV battery diagnostics advice to a pure petrol/diesel car; do not suggest engine spark plugs or exhaust emissions diagnostics to a pure EV).
+- Since IS_DIESEL is ${isDiesel}, recommend diesel-specific filters, engine oil grades (like 15W-40 or 5W-30 synthetic diesel), and Diesel Particulate Filter (DPF) / exhaust regeneration checks if relevant.
+- For PHEV/Hybrid vehicles (IS_HYBRID = ${isHybrid}), consider both the electric battery/motor and the combustion engine integration.
+- Ensure the advice respects the model year (${year}), vehicle age, and current mileage (${mileageKm} km) to judge common failures of this generation of vehicles.
+- Pay attention to the Last Service Date (${lastServiceDate}) to recommend whether overdue maintenance (e.g., standard fluid swaps, brake flushes, timing belts) is a likely culprit.
+- Do not suggest engine spark plugs or exhaust emissions diagnostics to a pure EV. Do not give EV high voltage battery diagnostics advice to a pure petrol/diesel car.
 
 Safety guidelines:
 - If issue involves brake failure, steering failure, fire smell, fuel leak, battery smoke, tyre burst, heavy engine overheating, EV high voltage, classify risk as high or emergency.

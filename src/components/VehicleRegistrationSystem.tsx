@@ -1874,7 +1874,7 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
         <div className="lg:col-span-5 space-y-4">
           <div className="bg-slate-900 border border-white/10 rounded-3xl p-5 space-y-3 shadow-xl">
             <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center justify-between border-b border-white/10 pb-2.5">
-              <span>Classified Fleet Registry</span>
+              <span>My Vehicle List</span>
               <span className="text-[11px] text-sky-400 font-bold font-mono">({vehicles.length} Units)</span>
             </h3>
 
@@ -1943,7 +1943,7 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
             <h3 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center justify-between pb-2 border-b border-white/10">
               <span className="flex items-center gap-1">
                 <Bell className="w-4 h-4 text-sky-450 text-sky-400" />
-                <span>Smart Powertrain Push-Log</span>
+                <span>Smart Maintenance Alerts</span>
               </span>
               <span className="text-[10px] bg-red-450 bg-red-500 text-white font-black px-2 rounded-full">ACTIVE</span>
             </h3>
@@ -2155,7 +2155,7 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
 
                 {/* Adaptive SPEC list based on engine type */}
                 <div className="p-4 bg-indigo-950/20 border border-indigo-400/25 rounded-2xl text-xs space-y-2">
-                  <span className="font-extrabold text-white text-[11px] uppercase tracking-wider block">Powertrain Custom Registers</span>
+                  <span className="font-extrabold text-white text-[11px] uppercase tracking-wider block">Vehicle Technical Details</span>
                   
                   {selectedV.engineType === "Diesel" && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-slate-300">
@@ -2216,7 +2216,7 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                 <div className="flex items-center gap-1.5 border-b border-white/10 pb-2.5">
                   <Sliders className="w-5 h-5 text-sky-400" />
                   <div>
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Dynamic Recommender Engine</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Maintenance Recommendations</h3>
                     <p className="text-[10px] text-slate-400">Classified recommended items for: <span className="text-white hover:underline">{selectedV.engineType || "Petrol"}</span></p>
                   </div>
                 </div>
@@ -2240,7 +2240,7 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
                 <div className="flex items-center gap-1.5 border-b border-white/10 pb-2.5">
                   <AlertTriangle className="w-5 h-5 text-rose-450 text-rose-400 animate-bounce" />
                   <div>
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Active Threshold Alerts</h3>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Vehicle Alerts</h3>
                     <p className="text-[10px] text-slate-400">Automatic computations calculated from Cambodia climate degradation maps</p>
                   </div>
                 </div>
