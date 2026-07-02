@@ -25,6 +25,8 @@ export interface UserProfile {
   active_module?: 'garage' | 'spare_part_shop' | 'petrol_station' | 'ev_charging_station' | 'marketplace_seller';
   permission_group?: 'Receptionist' | 'Mechanic' | 'Cashier' | 'Garage Manager' | 'Super Admin';
   user_roles?: ('Vehicle Owner' | 'Vehicle Manager' | 'Driver' | 'Garage Owner' | 'Garage Staff' | 'Spare Part Shop' | 'Petrol Station Partner' | 'EV Charging Station Partner' | 'Freelance Mechanic' | 'Admin')[];
+  subscription_status?: 'Free' | 'Premium';
+  subscription_plan?: 'basic' | 'pro' | 'business';
 }
 
 export type EngineType =

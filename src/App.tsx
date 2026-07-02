@@ -15,6 +15,7 @@ import {
   Info, 
   X, 
   FileCheck,
+  History,
   ChevronRight,
   Shield,
   Activity,
@@ -66,6 +67,8 @@ import FleetManager from "./components/FleetManager";
 import UserOnboardingTour from "./components/UserOnboardingTour";
 import { syncVehicleRecords } from "./utils/dataSync";
 import { RoleSwitcher } from "./components/RoleSwitcher";
+import { SyncHistory } from "./components/SyncHistory";
+import { motion, AnimatePresence } from "motion/react";
 
 /**
  * Custom Hook that triggers whenever a driver submits a fuel or maintenance record,
@@ -203,38 +206,43 @@ export default function App() {
 
     let list = vehicles;
 
-    // First scope by active_role permissions
+    // First scope by active_role permissions and relations
     if (role === "Admin") {
-      // Admin has full view
+      // Admin has full view of all vehicles on the system
     } else if (role === "Vehicle Owner") {
-      list = list.filter(v => v.owner === name || v.owner?.toLowerCase() === name.toLowerCase());
+      list = list.filter(v => v.owner === name || v.owner?.toLowerCase() === name.toLowerCase() || v.id === activeVehId);
     } else if (role === "Vehicle Manager") {
-      list = list.filter(v => v.owner === name || v.id === "v1" || v.id === "v3");
+      // Managers can see their own vehicles, seeded fleet cars, or explicitly scoped active vehicle
+      list = list.filter(v => v.owner === name || v.id === "v1" || v.id === "v3" || v.id === activeVehId);
     } else if (role === "Driver" || role === "Driver / Staff") {
-      list = list.filter(v => v.id === "v2" || v.owner === name);
+      // Drivers see their assigned driver cars or active vehicle context
+      list = list.filter(v => v.id === "v2" || v.owner === name || v.id === activeVehId);
     } else if (role === "Garage Owner" || role === "Garage Staff") {
-      list = list.filter(v => v.id === "v1" || v.id === "v2" || v.id === "v3");
+      // Garages see vehicles with service history at their business or fallback client vehicles
+      list = list.filter(v => 
+        v.id === "v1" || v.id === "v2" || v.id === "v3" ||
+        records.some(r => r.vehicleId === v.id && (r.providerId === activeBusId || r.provider?.toLowerCase().includes("angkor")))
+      );
     } else if (role === "Freelance Mechanic") {
       list = list.filter(v => v.id === "v1" || v.id === "v2");
     } else if (role === "Spare Part Shop") {
       const isGarageEnabled = userProfile.isMultiService && userProfile.activatedModules?.includes("Garage / Repair Shop Module");
       if (isGarageEnabled) {
-        list = list.filter(v => v.id === "v1" || v.id === "v2");
+        list = list.filter(v => v.id === "v1" || v.id === "v2" || v.id === activeVehId);
       } else {
-        list = [];
+        list = list.filter(v => v.id === activeVehId);
       }
     } else {
       list = [];
     }
 
-    // Second: Scoping by active_business_id (for business, garage, parts, etc.)
+    // Second: Scoping by active_business_id relation
     if (activeBusId && (role === "Garage Owner" || role === "Garage Staff" || role === "Spare Part Shop")) {
-      // Prioritize or limit if business matches
+      // Scoping logic applied: filter or prioritize records and vehicles in business view
     }
 
-    // Third: Scoping by active_vehicle_id if set (especially for Owner/Manager/Driver views)
-    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver")) {
-      // Ensure the selected active vehicle exists in the filtered list before restricting
+    // Third: Scoping by active_vehicle_id context parameter if specified and valid
+    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver" || role === "Driver / Staff")) {
       const hasVehicle = list.some(v => v.id === activeVehId);
       if (hasVehicle) {
         list = list.filter(v => v.id === activeVehId);
@@ -242,7 +250,7 @@ export default function App() {
     }
 
     return list;
-  }, [vehicles, userProfile]);
+  }, [vehicles, records, userProfile]);
 
   const filteredRecords = React.useMemo(() => {
     if (!userProfile) return [];
@@ -254,9 +262,11 @@ export default function App() {
 
     let list = records;
 
+    // Scope records by active_role permissions
     if (role === "Admin") {
-      // Admin has full view of all service records
+      // Admin has full system visibility
     } else if (role === "Garage Owner" || role === "Garage Staff") {
+      // Service providers see records done at their shop (matching activeBusId) or for their active filtered vehicles
       list = list.filter(r => 
         r.provider?.toLowerCase().includes(garageName.toLowerCase()) || 
         r.provider?.toLowerCase().includes("angkor") ||
@@ -268,7 +278,7 @@ export default function App() {
     }
 
     // Scope by active_vehicle_id context parameter if specified
-    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver")) {
+    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver" || role === "Driver / Staff")) {
       list = list.filter(r => r.vehicleId === activeVehId);
     }
 
@@ -325,7 +335,15 @@ export default function App() {
     }
   });
   const [showOfflineQueuePopover, setShowOfflineQueuePopover] = useState<boolean>(false);
+  const [showSyncHistoryModal, setShowSyncHistoryModal] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [syncToast, setSyncToast] = useState<{
+    show: boolean;
+    count: number;
+    duplicatesSkipped: number;
+    autoCorrected: number;
+    merged: number;
+  } | null>(null);
 
   // Persist offline queue
   useEffect(() => {
@@ -934,23 +952,108 @@ export default function App() {
     return false;
   };
 
-  // Synchronize cached offline queue items back to server DB
+  // Synchronize cached offline queue items back to server DB with dynamic conflict resolution
   const handleSyncOfflineQueue = async () => {
     if (offlineQueue.length === 0 || isDisconnected || isSyncing) return;
     setIsSyncing(true);
     
+    // Fetch fresh authoritative server records first for comparison
+    let serverRecords: any[] = [];
+    try {
+      const recordsRes = await fetch("/api/maintenance");
+      if (recordsRes.ok) {
+        serverRecords = await recordsRes.json();
+      }
+    } catch (err) {
+      console.error("Failed to retrieve authoritative server records for conflict auditing:", err);
+    }
+
     const remainingQueue = [...offlineQueue];
     const successfullySynced: string[] = [];
+    let duplicatesSkipped = 0;
+    let autoCorrected = 0;
+    let merged = 0;
 
     for (const item of remainingQueue) {
+      // 1. Detect Exact Duplicate Conflict (Same vehicle, date, category, mileage, and cost)
+      const isExactDuplicate = serverRecords.some(r => 
+        r.vehicleId === item.vehicleId &&
+        r.date === item.date &&
+        r.serviceCategory === item.serviceCategory &&
+        r.mileage === item.mileage &&
+        Math.abs((r.cost || 0) - (item.cost || 0)) < 0.01
+      );
+
+      if (isExactDuplicate) {
+        // Auto-resolve: mark as synced so we flush it from local cache, but skip redundant upload
+        successfullySynced.push(item.id);
+        duplicatesSkipped++;
+        continue;
+      }
+
+      // Clone log item to allow modifications during resolution
+      let resolvedItem = { ...item };
+      let resolutionTriggered = false;
+
+      // 2. Detect Same-day, Same-category conflict -> Merge descriptions & keep maximum mileage / cost
+      const sameDayCategoryMatch = serverRecords.find(r => 
+        r.vehicleId === item.vehicleId &&
+        r.date === item.date &&
+        r.serviceCategory === item.serviceCategory
+      );
+
+      if (sameDayCategoryMatch) {
+        resolvedItem.description = `${item.description} (Merged with existing service: ${sameDayCategoryMatch.description})`;
+        resolvedItem.mileage = Math.max(item.mileage, sameDayCategoryMatch.mileage);
+        resolvedItem.cost = Math.max(item.cost, sameDayCategoryMatch.cost);
+        merged++;
+        resolutionTriggered = true;
+      }
+
+      // 3. Detect Chronological Odometer Collisions
+      const vehicleServerRecords = serverRecords.filter(r => r.vehicleId === item.vehicleId);
+
+      if (vehicleServerRecords.length > 0) {
+        // Find maximum mileage registered for dates on or before this item's date
+        const priorRecords = vehicleServerRecords.filter(r => r.date <= item.date);
+        if (priorRecords.length > 0) {
+          const maxPriorMileage = Math.max(...priorRecords.map(r => r.mileage || 0));
+          if (resolvedItem.mileage < maxPriorMileage) {
+            // Odometer rollback detected. Correct it to prevent odometer backward collision!
+            resolvedItem.mileage = maxPriorMileage;
+            resolvedItem.description = `${resolvedItem.description} [Odometer auto-adjusted from ${item.mileage} km to ${maxPriorMileage} km to resolve rollback conflict]`;
+            if (!resolutionTriggered) {
+              autoCorrected++;
+              resolutionTriggered = true;
+            }
+          }
+        }
+
+        // Find minimum mileage registered for dates on or after this item's date
+        const futureRecords = vehicleServerRecords.filter(r => r.date >= item.date);
+        if (futureRecords.length > 0) {
+          const minFutureMileage = Math.min(...futureRecords.map(r => r.mileage || 0));
+          if (resolvedItem.mileage > minFutureMileage) {
+            // Future odometer conflict detected. Pull it down to maintain monotonically increasing timeline.
+            resolvedItem.mileage = minFutureMileage;
+            resolvedItem.description = `${resolvedItem.description} [Odometer auto-adjusted from ${item.mileage} km to ${minFutureMileage} km to resolve timeline conflict]`;
+            if (!resolutionTriggered) {
+              autoCorrected++;
+              resolutionTriggered = true;
+            }
+          }
+        }
+      }
+
+      // Execute Sync to Cloud Server
       const payload = {
-        vehicleId: item.vehicleId,
-        serviceCategory: item.serviceCategory,
-        description: item.description,
-        cost: item.cost,
-        mileage: item.mileage,
-        date: item.date,
-        provider: item.provider
+        vehicleId: resolvedItem.vehicleId,
+        serviceCategory: resolvedItem.serviceCategory,
+        description: resolvedItem.description,
+        cost: resolvedItem.cost,
+        mileage: resolvedItem.mileage,
+        date: resolvedItem.date,
+        provider: resolvedItem.provider
       };
 
       try {
@@ -962,10 +1065,13 @@ export default function App() {
 
         if (res.ok) {
           successfullySynced.push(item.id);
+          // Append newly synced item to our serverRecords array to account for successive item comparisons!
+          const createdRecord = await res.json();
+          serverRecords.push(createdRecord);
         }
       } catch (err) {
         console.error("Failed to sync offline item:", item, err);
-        break; // break early if reconnect status drops
+        break; // Stop loop if server connection drops during processing
       }
     }
 
@@ -984,7 +1090,46 @@ export default function App() {
         // Fallback: exclude synced items if fetch failed
         setRecords(prev => prev.filter(r => !successfullySynced.includes(r.id)));
       }
-      alert(`Sync Complete: Successfully synced ${successfullySynced.length} locally-cached service logs to the Cambodia MyCar Cloud Server!`);
+      
+      // Save sync event to Audit History
+      try {
+        const hasAnomalies = duplicatesSkipped > 0 || autoCorrected > 0 || merged > 0;
+        const detailsList: string[] = [];
+        detailsList.push(`Successfully synchronized ${successfullySynced.length} locally-cached maintenance log(s) to Cambodia MyCar Cloud Server.`);
+        if (duplicatesSkipped > 0) detailsList.push(`${duplicatesSkipped} redundant duplicate log(s) were safely filtered to prevent double entry.`);
+        if (autoCorrected > 0) detailsList.push(`${autoCorrected} chronological odometer rollback collision(s) were automatically corrected.`);
+        if (merged > 0) detailsList.push(`${merged} same-day category entries were merged.`);
+
+        const newLog = {
+          id: "sync-" + Date.now(),
+          timestamp: new Date().toLocaleString("en-US", { hour12: true }),
+          totalSynced: successfullySynced.length,
+          duplicatesSkipped,
+          autoCorrected,
+          merged,
+          status: hasAnomalies ? "warning" : "success",
+          details: detailsList.join(" ")
+        };
+
+        const existingHistorySaved = localStorage.getItem("mcc_sync_history");
+        let existingHistory = [];
+        if (existingHistorySaved) {
+          existingHistory = JSON.parse(existingHistorySaved);
+        }
+        const updatedHistory = [newLog, ...existingHistory];
+        localStorage.setItem("mcc_sync_history", JSON.stringify(updatedHistory));
+      } catch (err) {
+        console.error("Failed to write to sync history storage:", err);
+      }
+
+      // Trigger elegant persistent custom sync toast dialog with detailed stats
+      setSyncToast({
+        show: true,
+        count: successfullySynced.length,
+        duplicatesSkipped,
+        autoCorrected,
+        merged
+      });
     }
 
     setIsSyncing(false);
@@ -996,6 +1141,16 @@ export default function App() {
       handleSyncOfflineQueue();
     }
   }, [isDisconnected]);
+
+  // Auto-dismiss the offline data sync success toast after 6 seconds
+  useEffect(() => {
+    if (syncToast && syncToast.show) {
+      const timer = setTimeout(() => {
+        setSyncToast(null);
+      }, 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [syncToast]);
 
   // Switch to maps locator and highlight category search recommended from chat advisor
   const handleDiagnosisFocusTransition = (categoryName: string) => {
@@ -1278,6 +1433,15 @@ export default function App() {
               </div>
             )}
 
+            <button
+              onClick={() => setShowSyncHistoryModal(true)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 hover:text-slate-100 border border-white/10 text-sky-400 font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md select-none shrink-0"
+              title="View past offline-to-online sync runs and conflict audit log history"
+            >
+              <History className="w-3.5 h-3.5 text-sky-450" />
+              <span>Sync History</span>
+            </button>
+
             {userProfile?.role === "Vehicle Owner" && (
               <button
                 onClick={() => setActiveTab("fix_my_car_bidding")}
@@ -1419,6 +1583,17 @@ export default function App() {
                   <span>Change Role</span>
                 </button>
               </div>
+
+              <button
+                onClick={() => {
+                  setShowSyncHistoryModal(true);
+                  setIsMobileMenuOpen(false);
+                }}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 hover:text-white border border-white/10 text-sky-400 font-extrabold text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Sync Audit History</span>
+              </button>
 
               {/* Dynamic Connection Monitor */}
               <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-white/5 rounded-xl text-xs">
@@ -2303,6 +2478,40 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal 4: Sync History / Audit Logs */}
+      {showSyncHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSyncHistoryModal(false)}></div>
+          <div className="glass rounded-3xl p-6 max-w-md w-full relative z-10 space-y-4 shadow-2xl bg-slate-950/95 backdrop-blur-xl border border-white/10 text-left">
+            
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-1.5">
+                <History className="w-5 h-5 text-sky-400" />
+                <h3 className="text-base font-bold text-slate-100 uppercase tracking-wide">Sync Audit History</h3>
+              </div>
+              <button onClick={() => setShowSyncHistoryModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
+                <X className="w-5 h-5 cursor-pointer" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-normal">
+              Below is a record of successful offline-to-online queue sync operations, including automatic conflict resolution, duplications filters, and odometer auto-corrections.
+            </p>
+
+            <SyncHistory onClose={() => setShowSyncHistoryModal(false)} />
+
+            <div className="pt-2 border-t border-white/5 flex justify-end">
+              <button
+                onClick={() => setShowSyncHistoryModal(false)}
+                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Close Audit Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer credits and disclaimers */}
       <footer className="bg-black/10 border-t border-white/5 py-8 px-6 text-center text-slate-500 text-xs mt-12 space-y-2 rounded-t-3xl backdrop-blur-md">
         <p>© 2026 MyVehicle Care. Proudly tailored for Cambodia vehicle maintenance safety.</p>
@@ -2319,6 +2528,66 @@ export default function App() {
         onAddReminder={handleOnboardingAddReminder}
         onGrantCoins={handleOnboardingGrantCoins}
       />
+
+      {/* Sync success toast notification */}
+      <AnimatePresence>
+        {syncToast && syncToast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm w-[90vw] md:w-full p-4 bg-slate-900/95 border border-emerald-500/35 rounded-2xl shadow-2xl backdrop-blur-md text-slate-100 flex items-start gap-3 text-left animate-fadeIn"
+          >
+            <div className="p-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-xl shrink-0 mt-0.5">
+              <FileCheck className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <div className="flex items-center gap-1.5 justify-between">
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-widest font-mono">
+                  Cloud Live
+                </span>
+                <span className="text-[9px] text-slate-500 font-medium font-mono">Just now</span>
+              </div>
+              <h4 className="text-xs font-black text-slate-100 uppercase tracking-wide">
+                Database Backup Completed
+              </h4>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Successfully synced <strong>{syncToast.count}</strong> locally-cached maintenance log(s) to the secure server database. Your diagnostic data is now backed up safely!
+              </p>
+              {(syncToast.duplicatesSkipped > 0 || syncToast.autoCorrected > 0 || syncToast.merged > 0) && (
+                <div className="pt-2 border-t border-slate-800 space-y-1 text-[10px] text-slate-400 font-mono">
+                  <div className="font-bold text-slate-300">Conflict Resolutions:</div>
+                  {syncToast.duplicatesSkipped > 0 && (
+                    <div className="flex items-center gap-1 text-sky-400">
+                      <span>•</span>
+                      <span>{syncToast.duplicatesSkipped} duplicate log(s) safely filtered out</span>
+                    </div>
+                  )}
+                  {syncToast.autoCorrected > 0 && (
+                    <div className="flex items-center gap-1 text-amber-400">
+                      <span>•</span>
+                      <span>{syncToast.autoCorrected} chronological odometer collision(s) auto-corrected</span>
+                    </div>
+                  )}
+                  {syncToast.merged > 0 && (
+                    <div className="flex items-center gap-1 text-teal-400">
+                      <span>•</span>
+                      <span>{syncToast.merged} same-day entries merged</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button 
+              onClick={() => setSyncToast(null)}
+              className="p-1 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition cursor-pointer shrink-0"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

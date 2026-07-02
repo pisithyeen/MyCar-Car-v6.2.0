@@ -3166,7 +3166,9 @@ app.put("/api/profile", async (req: Request, res: Response) => {
     active_business_id,
     active_module,
     permission_group,
-    user_roles
+    user_roles,
+    subscription_status,
+    subscription_plan
   } = req.body;
   
   if (!name || !email) {
@@ -3203,7 +3205,9 @@ app.put("/api/profile", async (req: Request, res: Response) => {
       active_business_id: active_business_id || undefined,
       active_module: active_module || undefined,
       permission_group: permission_group || undefined,
-      user_roles: user_roles || undefined
+      user_roles: user_roles || undefined,
+      subscription_status: subscription_status || undefined,
+      subscription_plan: subscription_plan || undefined
     };
 
     if (dbUser) {
