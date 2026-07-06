@@ -20,13 +20,12 @@ import {
   Activity,
   UserCheck
 } from "lucide-react";
-import { VehicleProfile, AIDiagnosisResult, MaintenanceRecord } from "../types";
+import { VehicleProfile, AIDiagnosisResult } from "../types";
 
 interface AICareAssistantProps {
   vehicles: VehicleProfile[];
   selectedVehicle: VehicleProfile | null;
   onNavigateToGarages: (serviceType: string) => void;
-  records?: MaintenanceRecord[];
 }
 
 const PRESET_SYMPTOMS = [
@@ -40,8 +39,7 @@ const PRESET_SYMPTOMS = [
 export default function AICareAssistant({
   vehicles,
   selectedVehicle,
-  onNavigateToGarages,
-  records = []
+  onNavigateToGarages
 }: AICareAssistantProps) {
   const [symptomInput, setSymptomInput] = useState("");
   const [activeVehicleId, setActiveVehicleId] = useState(
@@ -60,33 +58,6 @@ export default function AICareAssistant({
     setError(null);
     setQueryMatchedText(text);
 
-    // Filter maintenance records for this active vehicle
-    const vehicleRecords = records.filter((r) => r.vehicleId === activeVehicleId);
-    const serviceHistorySummary = vehicleRecords.length > 0
-      ? vehicleRecords.map((r, i) => `${i + 1}. [${r.date}] Category: ${r.serviceCategory} | Desc: ${r.description} | Cost: $${r.cost} | Mileage: ${r.mileage} km | Provider: ${r.provider}`).join("\n")
-      : "No detailed service logs found on file.";
-
-    // Format full vehicle specs and metadata for prompt context
-    const fullProfileAndHistoryContext = `
-========================================
-[VEHICLE IDENTIFICATION PROFILE]
-- Brand & Model: ${activeVehicle?.brand || "N/A"} ${activeVehicle?.model || "N/A"}
-- Production Year: ${activeVehicle?.year || "N/A"}
-- Fuel / Energy Tech: ${activeVehicle?.fuelType || "N/A"} (${activeVehicle?.engineType || activeVehicle?.engineTypeNew || "Standard"})
-- Current Odometer: ${activeVehicle?.mileage ? activeVehicle.mileage.toLocaleString() : "N/A"} km
-- Transmission Config: ${activeVehicle?.transmission || "Automatic"}
-- License Plate: ${activeVehicle?.plateNumber || "N/A"}
-- Owner Notes & Custom Context: ${activeVehicle?.notes || "None"}
-- Special Sizing Limit: ${activeVehicle?.vehicleType === "SUV" || activeVehicle?.vehicleType === "Pickup" ? "600mm" : activeVehicle?.vehicleType === "Moto" ? "150mm" : "350mm"}
-
-[VEHICLE COMPREHENSIVE SERVICE HISTORY LOGS]
-${serviceHistorySummary}
-========================================
-`;
-
-    // Explicitly inject the selected vehicle's full profile and history into the prompt string
-    const enrichedSymptom = `Symptom described: ${text}\n\n${fullProfileAndHistoryContext}`;
-
     try {
       const response = await fetch("/api/ai/diagnosis", {
         method: "POST",
@@ -95,7 +66,7 @@ ${serviceHistorySummary}
         },
         body: JSON.stringify({
           vehicleId: activeVehicleId,
-          symptom: enrichedSymptom,
+          symptom: text,
           language: "en",
           vehicle: activeVehicle
         })

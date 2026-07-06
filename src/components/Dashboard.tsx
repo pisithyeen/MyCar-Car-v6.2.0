@@ -52,8 +52,7 @@ import {
   BatteryCharging,
   Thermometer,
   Star,
-  Phone,
-  User
+  Phone
 } from "lucide-react";
 import { VehicleProfile, MaintenanceRecord, SmartReminder, VehicleExpense, AttachedDocument, UserNotificationSettings, UserProfile, GaragePartner } from "../types";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
@@ -73,30 +72,6 @@ import MonthlyMaintenanceTab from "./MonthlyMaintenanceTab";
 import AppointmentsTab from "./AppointmentsTab";
 import GarageConnectionsTab from "./GarageConnectionsTab";
 import QrCodeTab from "./QrCodeTab";
-
-function NoVehicleSelectedPrompt({ onAddVehicle }: { onAddVehicle: () => void }) {
-  return (
-    <div className="glass rounded-3xl p-10 text-center max-w-lg mx-auto space-y-4 my-8">
-      <div className="w-16 h-16 bg-white/5 text-slate-400 rounded-2xl flex items-center justify-center mx-auto border border-white/10">
-        <Car className="w-8 h-8 text-sky-400" />
-      </div>
-      <div className="space-y-1">
-        <h3 className="text-lg font-bold text-slate-100">No Vehicle Selected</h3>
-        <p className="text-slate-400 text-sm">
-          Please select a vehicle from the list above or register a new one to access this section's records and tools.
-        </p>
-      </div>
-      <div className="flex justify-center gap-3">
-        <button
-          onClick={onAddVehicle}
-          className="px-5 py-2.5 bg-sky-500 text-slate-900 hover:bg-sky-600 rounded-xl font-bold text-xs transition shadow-md cursor-pointer uppercase tracking-wider"
-        >
-          Register New Car
-        </button>
-      </div>
-    </div>
-  );
-}
 
 interface DashboardProps {
   vehicles: VehicleProfile[];
@@ -435,9 +410,7 @@ export default function Dashboard({
   garages
 }: DashboardProps) {
   // Navigation inside the Driver dashboard
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'profile' | 'vehicles' | 'service_logs' | 'expenses' | 'reminders' | 'documents' | 'ai' | 'qr_access' | 'marketplace' | 'settings' | 'telegram'>('overview');
-  const [activeServiceTab, setActiveServiceTab] = useState<'timeline' | 'add_log' | 'pending' | 'monthly' | 'appointments'>('timeline');
-  const [activeQrAccessTab, setActiveQrAccessTab] = useState<'certificate' | 'connections' | 'history'>('certificate');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'vehicles' | 'expenses' | 'reminders' | 'documents' | 'settings' | 'ai' | 'telegram'>('overview');
 
   // Reminders and Fetching
   const [reminders, setReminders] = useState<SmartReminder[]>([]);
@@ -1319,7 +1292,7 @@ export default function Dashboard({
         }
       }, 100);
     } catch (err: any) {
-      console.warn("Camera stream retrieval notice (handled gracefully):", err?.message || err);
+      console.error("Camera stream retrieval failed:", err);
       setCameraPermissionError("Denied camera access or secure iFrame context block. Please use the simulated capture panel below to test diagnostic recall lookup.");
       setIsScanning(false);
     }
@@ -1757,20 +1730,6 @@ export default function Dashboard({
       setEditNotes(selectedVehicle.notes || "");
       setAiInsights(null); // Clear insights for a fresh fetch experience
 
-      // Sync the Cost Over Time chart vehicle dropdown to prevent cross-vehicle chart contamination
-      setCostOverTimeVehicleId(selectedVehicle.id);
-
-      // Auto-tune nearby partner category to match the vehicle's fuel energy specs
-      if (selectedVehicle.fuelType === 'EV' || selectedVehicle.fuelType === 'Hybrid') {
-        setSelectedNearbyCategory('EV & Hybrid');
-      } else if (selectedVehicle.fuelType === 'Diesel') {
-        setSelectedNearbyCategory('Diesel');
-      } else if (selectedVehicle.fuelType === 'Gasoline') {
-        setSelectedNearbyCategory('Petrol & Lube');
-      } else {
-        setSelectedNearbyCategory('All');
-      }
-
       // Reset vehicle-specific simulation and telemetry states to prevent cross-contamination
       setEvCurrentCharge(82);
       setEvIsCharging(false);
@@ -1783,19 +1742,6 @@ export default function Dashboard({
       setSim12VCrankingV(10.4);
       setIs12VSimulating(false);
       setForceEvPreview(false);
-    } else {
-      // Clear fields to avoid cross-contamination when no vehicle is active
-      setReminders([]);
-      setScanHistory([]);
-      setEditNickname("");
-      setEditPlateNumber("");
-      setEditVehicleType("Sedan");
-      setEditPurchaseDate("");
-      setEditPurchasePrice("");
-      setEditNotes("");
-      setAiInsights(null);
-      setCostOverTimeVehicleId("");
-      setSelectedNearbyCategory('All');
     }
   }, [selectedVehicle, records]);
 
@@ -1829,43 +1775,23 @@ export default function Dashboard({
     (r) => r.vehicleId === selectedVehicle?.id
   );
 
-  const lastLoggedServiceDate = React.useMemo(() => {
-    if (!selectedVehicle) return null;
-    if (activeRecords.length === 0) return selectedVehicle.lastServiceDate || null;
-    const sorted = [...activeRecords].sort((a, b) => {
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
-      return dateB - dateA;
-    });
-    return sorted[0].date;
-  }, [activeRecords, selectedVehicle]);
-
   const activeDocuments = documents.filter(
     (d) => d.vehicleId === selectedVehicle?.id
   );
 
-  // Dynamic monthly expense summing for active vehicle to prevent cross-vehicle contamination
+  // Dynamic monthly expense summing for active vehicle
   const currentMonthYearStr = new Date().toISOString().substring(0, 7); // "YYYY-MM"
-  const monthlyExpenseSum = React.useMemo(() => {
-    const targetExpenses = selectedVehicle ? expenses.filter(e => e.vehicleId === selectedVehicle.id) : expenses;
-    const targetRecords = selectedVehicle ? records.filter(r => r.vehicleId === selectedVehicle.id) : records;
+  const monthlyExpenseSum = expenses
+    .filter(e => e.date.substring(0, 7) === currentMonthYearStr)
+    .reduce((accumulation, item) => accumulation + item.amount, 0) +
+    records
+    .filter(r => r.date.substring(0, 7) === currentMonthYearStr)
+    .reduce((accumulation, item) => accumulation + item.cost, 0);
 
-    return targetExpenses
-      .filter(e => e.date && e.date.substring(0, 7) === currentMonthYearStr)
-      .reduce((accumulation, item) => accumulation + item.amount, 0) +
-      targetRecords
-      .filter(r => r.date && r.date.substring(0, 7) === currentMonthYearStr)
-      .reduce((accumulation, item) => accumulation + item.cost, 0);
-  }, [expenses, records, selectedVehicle, currentMonthYearStr]);
-
-  // Total expense sum across the selected vehicle to prevent cross-vehicle contamination
-  const totalFuelSumAcrossAll = React.useMemo(() => {
-    const targetExpenses = selectedVehicle ? expenses.filter(e => e.vehicleId === selectedVehicle.id) : expenses;
-    const targetRecords = selectedVehicle ? records.filter(r => r.vehicleId === selectedVehicle.id) : records;
-
-    return targetExpenses.reduce((acc, rec) => acc + rec.amount, 0) +
-      targetRecords.reduce((acc, rec) => acc + rec.cost, 0);
-  }, [expenses, records, selectedVehicle]);
+  // Total expense sum across all owned vehicles as request-compliant card
+  const totalFuelSumAcrossAll = expenses
+    .reduce((acc, rec) => acc + rec.amount, 0) +
+    records.reduce((acc, rec) => acc + rec.cost, 0);
 
   // Reminders counting
   const upcomingRemindersCount = reminders.filter(r => r.status === 'Due soon' || r.status === 'Due today').length;
@@ -2578,15 +2504,13 @@ export default function Dashboard({
           <div className="flex border-b border-white/15 select-none overflow-x-auto no-scrollbar gap-2">
             {[
               { id: 'overview', label: 'Overview', icon: <Car className="w-3.5 h-3.5" /> },
-              { id: 'profile', label: 'Vehicle Profile', icon: <User className="w-3.5 h-3.5" /> },
               { id: 'vehicles', label: 'My Vehicles', icon: <Wrench className="w-3.5 h-3.5" /> },
-              { id: 'service_logs', label: 'Service Logs', icon: <ClipboardList className="w-3.5 h-3.5" /> },
               { id: 'expenses', label: 'Expenses & Reports', icon: <DollarSign className="w-3.5 h-3.5" /> },
               { id: 'reminders', label: 'Reminders', icon: <Calendar className="w-3.5 h-3.5" /> },
-              { id: 'documents', label: 'Documents', icon: <FileText className="w-3.5 h-3.5" /> },
-              { id: 'ai', label: 'AI Insights', icon: <Brain className="w-3.5 h-3.5" /> },
-              { id: 'qr_access', label: 'QR & Access', icon: <QrCode className="w-3.5 h-3.5" /> },
-              { id: 'marketplace', label: 'Marketplace / Sell Vehicle', icon: <Tag className="w-3.5 h-3.5" /> }
+              { id: 'documents', label: 'Document Wallet', icon: <FileText className="w-3.5 h-3.5" /> },
+              { id: 'ai', label: 'AI Diagnosis Insights', icon: <Brain className="w-3.5 h-3.5" /> },
+              { id: 'settings', label: 'Notifications', icon: <Bell className="w-3.5 h-3.5" /> },
+              { id: 'telegram', label: 'Telegram Integration', icon: <MessageSquare className="w-3.5 h-3.5" /> }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -2635,7 +2559,7 @@ export default function Dashboard({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="glass p-4 rounded-2xl flex flex-col justify-between space-y-3 shadow-md">
                   <div className="flex justify-between items-center text-slate-500">
-                    <span className="text-[10px] font-bold uppercase tracking-wider">My Vehicles</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider">Garaged Fleet</span>
                     <div className="p-1.5 bg-sky-500/10 rounded-lg text-sky-400"><Car className="w-4 h-4" /></div>
                   </div>
                   <div>
@@ -2683,7 +2607,7 @@ export default function Dashboard({
               </div>
 
               {/* INTERACTIVE EV BATTERY HEALTH & LIVE CHARGE MONITOR COMPONENT */}
-              {selectedVehicle && hasElectricChargingPlug(selectedVehicle) && (
+              {selectedVehicle && hasEvBatteryAndCharging(selectedVehicle) && (
                 <div id="ev-battery-health-indicator" className="glass p-5 rounded-2xl border border-white/5 space-y-5 shadow-lg bg-slate-900/40 relative overflow-hidden backdrop-blur-md">
                   {/* Background decorative pulsing light */}
                   <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none animate-pulse"></div>
@@ -3020,22 +2944,9 @@ export default function Dashboard({
                     <DollarSign className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
                     <span className="text-[10px] font-bold">Add Expense</span>
                   </button>
-                  <button 
-                    onClick={() => { 
-                      setActiveSubTab('expenses'); 
-                      setShowAddExpensePanel(true); 
-                      setExpCategory(selectedVehicle && isPureEV(selectedVehicle) ? 'Charging' : 'Fuel'); 
-                    }} 
-                    className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group"
-                  >
-                    {selectedVehicle && isPureEV(selectedVehicle) ? (
-                      <Zap className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition animate-pulse" />
-                    ) : (
-                      <FlameKindling className="w-5 h-5 text-amber-500 group-hover:scale-110 transition" />
-                    )}
-                    <span className="text-[10px] font-bold">
-                      {selectedVehicle && isPureEV(selectedVehicle) ? "Add Charge Log" : "Add Fuel Log"}
-                    </span>
+                  <button onClick={() => { setActiveSubTab('expenses'); setShowAddExpensePanel(true); setExpCategory('Fuel'); }} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
+                    <FlameKindling className="w-5 h-5 text-amber-500 group-hover:scale-110 transition" />
+                    <span className="text-[10px] font-bold">Add Fuel Log</span>
                   </button>
                   <button onClick={onAddRecord} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
                     <Wrench className="w-5 h-5 text-blue-400 group-hover:scale-110 transition" />
@@ -3058,7 +2969,7 @@ export default function Dashboard({
                     <TrendingUp className="w-5 h-5 text-pink-400 group-hover:scale-110 transition" />
                     <span className="text-[10px] font-bold">View Report</span>
                   </button>
-                  <button onClick={() => setActiveSubTab('qr_access')} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
+                  <button onClick={() => setActiveSubTab('settings')} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
                     <QrCode className="w-5 h-5 text-violet-400 group-hover:scale-110 transition" />
                     <span className="text-[10px] font-bold">My QR Code</span>
                   </button>
@@ -4622,52 +4533,35 @@ export default function Dashboard({
           {/* Subscreen: Tab 2: VEHICLE MANAGEMENT DETAIL & FLEET VIEW */}
           {activeSubTab === 'vehicles' && (
             <div className="space-y-6">
-              <VehicleFleetView
-                vehicles={vehicles}
-                records={records}
-                pendingRequests={pendingRequests}
-                appointments={appointments}
-                onSelectVehicle={(v) => {
-                  onSelectVehicle(v);
-                  setActiveSubTab('overview');
-                }}
-                onOpenQr={(v) => {
-                  onSelectVehicle(v);
-                  setActiveSubTab('qr_access');
-                  setActiveQrAccessTab('certificate');
-                }}
-                onAddVehicle={onAddVehicle}
-                onBookGarage={(v) => {
-                  onSelectVehicle(v);
-                  setActiveSubTab('service_logs');
-                  setActiveServiceTab('appointments');
-                }}
-              />
-            </div>
-          )}
-
-          {/* Detailed View container for specific tabs when a vehicle is active */}
-          {(activeSubTab === 'profile' || 
-            activeSubTab === 'service_logs' || 
-            activeSubTab === 'qr_access' || 
-            activeSubTab === 'marketplace' || 
-            activeSubTab === 'expenses' || 
-            activeSubTab === 'reminders' || 
-            activeSubTab === 'ai' || 
-            (activeSubTab === 'documents' && selectedVehicle)) && (
-            <div className="space-y-6">
               {!selectedVehicle ? (
-                <NoVehicleSelectedPrompt onAddVehicle={onAddVehicle} />
+                /* 1. Fleet Dashboard (Multi-car Card Grid) */
+                <VehicleFleetView
+                  vehicles={vehicles}
+                  records={records}
+                  pendingRequests={pendingRequests}
+                  appointments={appointments}
+                  onSelectVehicle={(v) => {
+                    onSelectVehicle(v);
+                    setActiveSpecTab('overview');
+                  }}
+                  onOpenQr={(v) => {
+                    onSelectVehicle(v);
+                    setActiveSpecTab('qr_code');
+                  }}
+                  onAddVehicle={onAddVehicle}
+                  onBookGarage={(v) => {
+                    onSelectVehicle(v);
+                    setActiveSpecTab('appointments');
+                  }}
+                />
               ) : (
+                /* 2. Full 9-Tab Vehicle Detail Page */
                 <div className="space-y-6">
                   {/* Outer Subpage Header */}
                   <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4 border-b border-white/5 pb-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                       <button
-                        onClick={() => {
-                          onSelectVehicle(null);
-                          setActiveSubTab('vehicles');
-                        }}
+                        onClick={() => onSelectVehicle(null)}
                         className="p-2.5 px-4 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-white/5 cursor-pointer"
                       >
                         <span>← Back to Fleet</span>
@@ -4756,7 +4650,6 @@ export default function Dashboard({
                   </div>
 
                   {/* Horizontal Tab Bar switcher */}
-                  {false && (
                   <div className="flex gap-2 p-1.5 bg-slate-900/60 rounded-2xl overflow-x-auto border border-white/5 no-scrollbar scroll-smooth">
                     {[
                       { id: 'overview', name: 'Overview' },
@@ -4799,12 +4692,11 @@ export default function Dashboard({
                       </button>
                     ))}
                   </div>
-                  )}
 
                   {/* Rendering Active Detail Sub-Tab */}
                   <div className="pt-2">
                     {/* SUBTAB 1: Overview Specs & Identity Profile */}
-                    {activeSubTab === 'profile' && (
+                    {activeSpecTab === 'overview' && (
                       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-4">
                         {/* LEFT COLUMN: VEHICLE DOSSIER, USEFUL INFO, & RESALE RATING */}
                         <div className="lg:col-span-5 space-y-6">
@@ -4911,7 +4803,7 @@ export default function Dashboard({
                                 <div className="flex justify-between py-1.5 border-b border-white/5">
                                   <span className="text-slate-500 font-medium">Last Sync'd Service</span>
                                   <span className="font-bold text-emerald-400 font-mono">
-                                    {lastLoggedServiceDate ? new Date(lastLoggedServiceDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "None logged yet"}
+                                    {selectedVehicle.lastServiceDate ? new Date(selectedVehicle.lastServiceDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "None logged yet"}
                                   </span>
                                 </div>
                                 <div className="flex justify-between py-1.5 border-b border-white/5">
@@ -4960,7 +4852,7 @@ export default function Dashboard({
                               <div className="p-2.5 bg-slate-900/60 rounded-xl space-y-1 border border-white/5">
                                 <span className="text-slate-500 block uppercase font-mono tracking-wider font-extrabold text-[9px]">Wading Limit</span>
                                 <span className="text-emerald-400 font-black block text-xs">
-                                  {selectedVehicle.vehicleType === 'Moto' ? "150 mm (Avoid engine intake)" : selectedVehicle.vehicleType === 'SUV' || selectedVehicle.vehicleType === 'Pickup' ? "600 mm (Safe clearance)" : "350 mm (Avoid deep pooling)"}
+                                  {selectedVehicle.vehicleType === 'SUV' || selectedVehicle.vehicleType === 'Pickup' ? "600 mm (Safe clearance)" : "350 mm (Avoid deep pooling)"}
                                 </span>
                               </div>
                               {/* Limit 2 */}
@@ -4970,15 +4862,7 @@ export default function Dashboard({
                               </div>
                             </div>
                             <div className="p-3 bg-sky-500/5 rounded-2xl border border-sky-500/15 text-[11px] text-slate-350 leading-relaxed italic">
-                              {isPureEV(selectedVehicle) ? (
-                                <span><strong>EV High-Voltage Sealing:</strong> High-voltage components are hermetically sealed (IP67+). However, driving in standing water exceeding door sills puts cabin wiring harness channels and secondary 12V modules at high corrosion risk. Check underbody floor pans for debris!</span>
-                              ) : selectedVehicle.fuelType === 'Hybrid' ? (
-                                <span><strong>Hybrid Battery Vent Warning:</strong> Hybrid vehicles have low-lying high-voltage battery cooling intake vents in the cabin or rear seats. If cabin carpets get wet from deep wading, water can instantly ruin cooling fans and modules. Keep wading low!</span>
-                              ) : selectedVehicle.fuelType === 'Diesel' ? (
-                                <span><strong>Diesel Fuel Filter Care:</strong> Diesel vehicles generally handle deep water better, but monsoon moisture degrades diesel quality. Regularly drain the water separator filter to avoid high-pressure fuel pump seizures.</span>
-                              ) : (
-                                <span><strong>Gasoline Hydro-lock Protection:</strong> Standard gasoline models draw engine air from low bumper level scoops. Swallowing standing water leads to instant engine block hydro-locking, causing severe cylinder and rod fracturing. If water is bumper-deep, do not cross!</span>
-                              )}
+                              <strong>Wet-road Protection Tip:</strong> Hybrid models (like BYD PHEVs and Toyota Prius) have air intakes for high-voltage battery cooling packs located low. Never drive into standing water matching or exceeding your low door levels!
                             </div>
                           </div>
 
@@ -4996,33 +4880,31 @@ export default function Dashboard({
                                   <span className="text-slate-500 text-[10px]">Adjust every 30 days</span>
                                 </div>
                                 <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/5 border border-amber-500/20 px-2 py-1 rounded-xl">
-                                  {selectedVehicle.vehicleType === 'Moto' ? "28-32 PSI (Front/Rear)" : selectedVehicle.vehicleType === 'SUV' || selectedVehicle.vehicleType === 'Pickup' ? "35 PSI (Front/Rear)" : "32 PSI (Standard)"}
+                                  {selectedVehicle.vehicleType === 'SUV' || selectedVehicle.vehicleType === 'Pickup' ? "35 PSI (Front/Rear)" : "32 PSI (Standard)"}
                                 </span>
                               </div>
 
                               {/* Cambodia Fuel compatibility */}
                               <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 flex justify-between items-center">
                                 <div className="space-y-0.5">
-                                  <span className="text-slate-400 font-bold block text-[11px]">{isPureEV(selectedVehicle) ? "Charging Standard" : "Cambodia Fuel Suitability"}</span>
-                                  <span className="text-slate-500 text-[10px]">{isPureEV(selectedVehicle) ? "Charging interface compatibility" : "Fuel efficiency optimization"}</span>
+                                  <span className="text-slate-400 font-bold block text-[11px]">Cambodia Fuel Suitability</span>
+                                  <span className="text-slate-500 text-[10px]">Fuel efficiency optimization</span>
                                 </div>
                                 <span className="font-mono text-xs font-bold text-sky-400 bg-sky-500/5 border border-sky-500/20 px-2 py-1 rounded-xl">
-                                  {isPureEV(selectedVehicle) ? 'AC Type 2 / DC CCS2' : selectedVehicle.fuelType === 'Diesel' ? 'Premium Diesel Euro 5' : 'Gasoline Premium 95'}
+                                  {selectedVehicle.fuelType === 'Diesel' ? 'Premium Diesel Euro 5' : 'Gasoline Premium 95'}
                                 </span>
                               </div>
 
-                              {/* A/C Compressor Refrigerant */}
-                              {selectedVehicle.vehicleType !== 'Moto' && (
-                                <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 flex justify-between items-center">
-                                  <div className="space-y-0.5">
-                                    <span className="text-slate-400 font-bold block text-[11px]">A/C Compressor Refrigerant</span>
-                                    <span className="text-slate-500 text-[10px]">Essential in tropical climate</span>
-                                  </div>
-                                  <span className="font-mono text-[11px] font-bold text-slate-300">
-                                    {selectedVehicle.year > 2018 ? "R1234yf (ECO Class)" : "R134a (Climate Class)"}
-                                  </span>
+                              {/* A/C Refrigerant guidelines */}
+                              <div className="p-3 bg-slate-950/60 rounded-2xl border border-white/5 flex justify-between items-center">
+                                <div className="space-y-0.5">
+                                  <span className="text-slate-400 font-bold block text-[11px]">A/C Compressor Refrigerant</span>
+                                  <span className="text-slate-500 text-[10px]">Essential in tropical climate</span>
                                 </div>
-                              )}
+                                <span className="font-mono text-[11px] font-bold text-slate-300">
+                                  {selectedVehicle.year > 2018 ? "R1234yf (ECO Class)" : "R134a (Climate Class)"}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
@@ -5039,12 +4921,8 @@ export default function Dashboard({
                               </span>
                               <span className="text-xs text-slate-400 font-medium">Value Retention Score</span>
                             </div>
-                            <p className="text-[11.5px] text-slate-400 leading-relaxed">
-                              {selectedVehicle.vehicleType === 'Moto' ? (
-                                "Honda motorcycles (Dream, Scoopy, Zoomer-X) maintain incredibly high secondary prices in Phnom Penh, often retaining up to 85% value after 3 years of daily staff transit."
-                              ) : (
-                                "Japanese models (Toyota & Lexus) and verified utility heavy commercial platforms maintain exceptionally high secondary prices in Phnom Penh and Siem Reap."
-                              )}
+                            <p className="text-[11.5px] text-slate-400 leading-relaxed leading-relaxed">
+                              Japanese models (Toyota & Lexus) and verified utility heavy commercial platforms maintain exceptionally high secondary prices in Phnom Penh and Siem Reap.
                             </p>
                             <div className="p-3 bg-emerald-500/5 rounded-2xl border border-emerald-500/10 text-[11px] text-emerald-300 font-medium">
                               💡 <strong>Boost resale up to +12%:</strong> Showcasing a consolidated, digital timeline of verified service logs completely verified by QR scan with certified garages eliminates buyer odometer worries.
@@ -5317,35 +5195,8 @@ export default function Dashboard({
                       </div>
                     )}
 
-                    {activeSubTab === 'service_logs' && (
-                      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-900/60 rounded-2xl border border-white/5 w-fit mb-6">
-                        {[
-                          { id: 'timeline', label: 'History Portfolio', icon: <ClipboardList className="w-3.5 h-3.5" /> },
-                          { id: 'add_log', label: 'Add Manual Log', icon: <Plus className="w-3.5 h-3.5" /> },
-                          { id: 'pending', label: 'Garage Approvals', icon: <Activity className="w-3.5 h-3.5" />, badge: pendingRequests.filter(r => r.vehicleId === selectedVehicle.id && r.approvalStatus === 'pending_owner_approval').length },
-                          { id: 'monthly', label: 'Monthly Checklist', icon: <CheckCircle className="w-3.5 h-3.5" /> },
-                          { id: 'appointments', label: 'Appointments', icon: <Calendar className="w-3.5 h-3.5" /> }
-                        ].map(st => (
-                          <button
-                            key={st.id}
-                            onClick={() => setActiveServiceTab(st.id as any)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                              activeServiceTab === st.id
-                                ? 'bg-sky-500 text-slate-950 shadow'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            <span>{st.label}</span>
-                            {st.badge ? (
-                              <span className="px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[9px] font-mono font-black animate-pulse">{st.badge}</span>
-                            ) : null}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
                     {/* SUBTAB 2: Pending Garage Authorization Requests */}
-                    {activeSubTab === 'service_logs' && activeServiceTab === 'pending' && (
+                    {activeSpecTab === 'pending_requests' && (
                       <PendingRequestsTab
                         vehicleId={selectedVehicle.id}
                         pendingRequests={pendingRequests}
@@ -5357,7 +5208,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 3: Combined Approved Service History Timeline */}
-                    {activeSubTab === 'service_logs' && activeServiceTab === 'timeline' && (
+                    {activeSpecTab === 'service_history' && (
                       <div className="glass rounded-3xl p-6 border border-white/5 space-y-4">
                         <div>
                           <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
@@ -5413,7 +5264,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 4: Monthly Inspection Checklist */}
-                    {activeSubTab === 'service_logs' && activeServiceTab === 'monthly' && (
+                    {activeSpecTab === 'monthly_maintenance' && (
                       <MonthlyMaintenanceTab
                         vehicleId={selectedVehicle.id}
                         checklists={monthlyChecklists}
@@ -5424,7 +5275,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 5: Booking & Scheduling */}
-                    {activeSubTab === 'service_logs' && activeServiceTab === 'appointments' && (
+                    {activeSpecTab === 'appointments' && (
                       <AppointmentsTab
                         vehicleId={selectedVehicle.id}
                         appointments={appointments}
@@ -5434,30 +5285,8 @@ export default function Dashboard({
                       />
                     )}
 
-                    {activeSubTab === 'service_logs' && activeServiceTab === 'add_log' && (
-                      <div className="glass rounded-3xl p-10 text-center max-w-lg mx-auto space-y-4 my-8">
-                        <div className="w-16 h-16 bg-white/5 text-slate-400 rounded-2xl flex items-center justify-center mx-auto border border-white/10">
-                          <Plus className="w-8 h-8 text-sky-400" />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="text-lg font-bold text-slate-100">Add Service Record</h3>
-                          <p className="text-slate-400 text-sm">
-                            Click the button below to open the secure logging dialog and register a new repair, service, or oil checkup.
-                          </p>
-                        </div>
-                        <div className="flex justify-center gap-3">
-                          <button
-                            onClick={onAddRecord}
-                            className="px-5 py-2.5 bg-sky-500 text-slate-900 hover:bg-sky-600 rounded-xl font-bold text-xs transition shadow-md cursor-pointer uppercase tracking-wider animate-pulse"
-                          >
-                            Open Log Form
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
                     {/* SUBTAB 6: Intelligent Notifications Reminders (retaining smart algorithms correctly) */}
-                    {activeSubTab === 'reminders' && (
+                    {activeSpecTab === 'reminder_settings' && (
                       <div className="space-y-6 pb-4">
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                           {/* Pre-existing Add reminder segment */}
@@ -5686,30 +5515,8 @@ export default function Dashboard({
                       </div>
                     )}
 
-                    {activeSubTab === 'qr_access' && (
-                      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-900/60 rounded-2xl border border-white/5 w-fit mb-6">
-                        {[
-                          { id: 'certificate', label: 'Secure QR Code', icon: <QrCode className="w-3.5 h-3.5" /> },
-                          { id: 'connections', label: 'Connected Workshops', icon: <Shield className="w-3.5 h-3.5" /> },
-                          { id: 'history', label: 'Scan Audit Ledger', icon: <Activity className="w-3.5 h-3.5" /> }
-                        ].map(st => (
-                          <button
-                            key={st.id}
-                            onClick={() => setActiveQrAccessTab(st.id as any)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
-                              activeQrAccessTab === st.id
-                                ? 'bg-sky-500 text-slate-950 shadow'
-                                : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                          >
-                            <span>{st.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
                     {/* SUBTAB 7: Cryptographic QR Code Certificate Certificate */}
-                    {activeSubTab === 'qr_access' && activeQrAccessTab === 'certificate' && (
+                    {activeSpecTab === 'qr_code' && (
                       <QrCodeTab
                         vehicle={selectedVehicle}
                         onRegenerateToken={handleRegenerateToken}
@@ -5721,7 +5528,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 8: Secure Paper Cabinet Documents Registration */}
-                    {activeSubTab === 'documents' && (
+                    {activeSpecTab === 'documents' && (
                       <div className="glass rounded-3xl p-6 border border-white/5 space-y-5">
                         <div className="flex justify-between items-center border-b border-white/5 pb-2">
                           <div>
@@ -5845,7 +5652,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 9: Connected Workshop Authorizations Access */}
-                    {activeSubTab === 'qr_access' && activeQrAccessTab === 'connections' && (
+                    {activeSpecTab === 'garage_connections' && (
                       <GarageConnectionsTab
                         vehicleId={selectedVehicle.id}
                         connections={connections}
@@ -5857,7 +5664,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 10: QR Scan History Log */}
-                    {activeSubTab === 'qr_access' && activeQrAccessTab === 'history' && (
+                    {activeSpecTab === 'qr_scan_history' && (
                       <div className="space-y-6">
                         {/* Summary panel/Intro card */}
                         <div className="glass bg-slate-900/40 p-5 rounded-3xl border border-white/5 space-y-3">
@@ -6044,7 +5851,7 @@ export default function Dashboard({
                     )}
 
                     {/* SUBTAB 11: Transfer and Status Panel */}
-                    {activeSubTab === 'marketplace' && (
+                    {activeSpecTab === 'ownership_transfer' && (
                       <div className="space-y-6">
                         {/* Summary panel/Intro card */}
                         <div className="glass bg-slate-900/40 p-5 rounded-3xl border border-white/5 space-y-3">
@@ -6532,286 +6339,6 @@ export default function Dashboard({
                             </div>
                           </div>
                         )}
-
-                        {/* SUBTAB 12: Expenses & Financial Outflow Tracker */}
-                        {activeSubTab === 'expenses' && (
-                          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-4">
-                            <div className="lg:col-span-5 space-y-6">
-                              {/* Outflow tracker toggler */}
-                              <div className="glass rounded-3xl p-5 space-y-4 shadow-md">
-                                <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                  <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase">
-                                    Log Custom Log Expense Receipt
-                                  </h3>
-                                  <button
-                                    onClick={() => setShowAddExpensePanel(!showAddExpensePanel)}
-                                    className="p-1 px-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] uppercase font-bold rounded-lg hover:bg-emerald-500/20 transition flex items-center gap-1 cursor-pointer"
-                                  >
-                                    <Plus className="w-3 h-3" />
-                                    <span>{showAddExpensePanel ? "Collapse Form" : "Log Expense"}</span>
-                                  </button>
-                                </div>
-
-                                {showAddExpensePanel ? (
-                                  <form onSubmit={handleAddExpenseSubmit} className="space-y-4 text-xs">
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Expense Category</label>
-                                        <select
-                                          value={expCategory}
-                                          onChange={(e) => setExpCategory(e.target.value as any)}
-                                          className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-100 placeholder-slate-500 text-slate-300 font-medium"
-                                        >
-                                          {['Fuel', 'Oil change', 'Maintenance', 'Repair', 'Spare parts', 'Tire', 'Battery', 'Car wash', 'Parking', 'Toll fee', 'Insurance', 'Road tax', 'Loan payment', 'Accessories', 'Emergency repair', 'Other'].map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Amount spent (USD)</label>
-                                        <input
-                                          type="number"
-                                          step="0.01"
-                                          value={expAmount}
-                                          onChange={(e) => setExpAmount(e.target.value)}
-                                          required
-                                          placeholder="e.g., 40.00"
-                                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100 font-mono"
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Date</label>
-                                        <input
-                                          type="date"
-                                          value={expDate}
-                                          onChange={(e) => setExpDate(e.target.value)}
-                                          required
-                                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Odometer Checkpoint (km)</label>
-                                        <input
-                                          type="number"
-                                          value={expMileage}
-                                          onChange={(e) => setExpMileage(e.target.value)}
-                                          placeholder="Odometer limit to cross"
-                                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100 font-mono"
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Vendor Garage / Shop</label>
-                                        <input
-                                          type="text"
-                                          value={expProvider}
-                                          onChange={(e) => setExpProvider(e.target.value)}
-                                          placeholder="e.g., Tela Gas, ABA payment"
-                                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Payment Method</label>
-                                        <select
-                                          value={expPaymentMethod}
-                                          onChange={(e) => setExpPaymentMethod(e.target.value as any)}
-                                          className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
-                                        >
-                                          <option value="ABA Pay">ABA Pay (QR)</option>
-                                          <option value="Cash">Cash (Standard KHR/USD)</option>
-                                          <option value="Wing">Wing transfer</option>
-                                          <option value="Credit Card">Credit Card</option>
-                                          <option value="Other">Other Gateway</option>
-                                        </select>
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <label className="text-[10px] font-bold text-slate-400 uppercase">Notes & Description</label>
-                                      <input
-                                        type="text"
-                                        value={expNotes}
-                                        onChange={(e) => setExpNotes(e.target.value)}
-                                        placeholder="Warranty duration or receipt code values"
-                                        className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl"
-                                      />
-                                    </div>
-
-                                    <button
-                                      type="submit"
-                                      className="w-full py-2.5 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-emerald-600 transition"
-                                    >
-                                      Register Financial Outflow
-                                    </button>
-                                  </form>
-                                ) : (
-                                  <div className="space-y-2 text-xs">
-                                    <p className="text-slate-400 leading-relaxed">
-                                      Log fuel fillings, spare parts receipt logs, car washes and municipal parking coupons to compile automated visual reports and predict monthly car ownership overheads.
-                                    </p>
-                                    <button 
-                                      onClick={() => setShowAddExpensePanel(true)}
-                                      className="w-full py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition text-slate-350 font-bold"
-                                    >
-                                      Launch Log Form View
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* SVG Visual Spend stats box */}
-                              <div className="glass rounded-3xl p-5 space-y-4 shadow-md">
-                                {renderSVGSpendGraph()}
-                              </div>
-                            </div>
-
-                            {/* Expense records layout list */}
-                            <div className="lg:col-span-7 glass rounded-3xl p-5 space-y-4 shadow-md">
-                              <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                                <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest flex items-center gap-2">
-                                  <TrendingUp className="w-4 h-4 text-emerald-400 animate-pulse" />
-                                  <span>Outflow Ledger & Invoices ({activeExpenses.length})</span>
-                                </h3>
-                                <span className="text-xs font-semibold text-emerald-400 font-mono">Month dynamic limit: active</span>
-                              </div>
-
-                              <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-2 no-scrollbar text-xs">
-                                {activeExpenses.map(item => (
-                                  <div key={item.id} className="p-3 bg-white/3 hover:bg-white/5 border border-white/5 rounded-xl flex items-center justify-between gap-3 text-xs transition">
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg">
-                                        <DollarSign className="w-4.5 h-4.5" />
-                                      </div>
-                                      <div>
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-bold text-slate-200">{item.category}</span>
-                                          <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-mono tracking-tighter uppercase font-bold">{item.paymentMethod}</span>
-                                        </div>
-                                        <span className="text-[10px] text-slate-500 block">{item.date} • {item.provider} {item.mileage > 0 ? `• Odo ${item.mileage.toLocaleString()} km` : ''}</span>
-                                        {item.notes && <p className="text-slate-400 text-[11px] mt-1 leading-normal italic">Notes: {item.notes}</p>}
-                                      </div>
-                                    </div>
-                                    <div className="text-right flex flex-col items-end gap-1 font-mono">
-                                      <span className="text-sm font-bold text-sky-450">-${item.amount} USD</span>
-                                      <button
-                                        onClick={() => handleDeleteExpense(item.id)}
-                                        className="text-[10px] text-slate-500 hover:text-rose-400 font-bold hover:underline"
-                                      >
-                                        delete record
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))}
-
-                                {activeExpenses.length === 0 && (
-                                  <div className="text-center py-12 text-slate-500">
-                                    No expenses logged. Add synthetic fuel items or accessories to review distributions.
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* SUBTAB 13: AI INSIGHTS DIAGNOSTICS */}
-                        {activeSubTab === 'ai' && (
-                          <div className="space-y-6">
-                            <div className="glass rounded-3xl p-6 space-y-5 relative overflow-hidden shadow-xl">
-                              <div className="absolute right-0 top-0 w-80 h-40 bg-purple-500/5 rounded-full blur-3xl pointer-events-none select-none"></div>
-                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
-                                <div>
-                                  <div className="flex items-center gap-1 text-purple-400 text-xs font-bold tracking-widest uppercase mb-1">
-                                    <Brain className="w-4 h-4 animate-pulse" />
-                                    <span>Gemini 3.5 Flash Diagnostics Engine</span>
-                                  </div>
-                                  <h2 className="text-xl font-bold text-slate-150">Vulnerability and Ownership Optimization</h2>
-                                  <p className="text-xs text-slate-400">Retreive custom insights matching tracked odometer points and expense allocations in Cambodia gridlock contexts.</p>
-                                </div>
-                                <button
-                                  onClick={handleTriggerAiInsights}
-                                  disabled={aiLoading}
-                                  className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-[1.02] text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs transition shadow-lg shrink-0 cursor-pointer"
-                                >
-                                  {aiLoading ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                                  <span>{aiInsights ? "Re-evaluate Insights" : "Generate AI Insights"}</span>
-                                </button>
-                              </div>
-
-                              {aiLoading ? (
-                                <div className="py-20 text-center space-y-3.5">
-                                  <div className="w-10 h-10 border-4 border-sky-400/20 border-t-sky-400 rounded-full animate-spin mx-auto"></div>
-                                  <p className="text-xs text-slate-400 animate-pulse">Running advanced machine learning diagnostics on vehicle files...</p>
-                                </div>
-                              ) : aiInsights ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1 text-xs">
-                                  {/* Maintenance Suggestions */}
-                                  <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
-                                    <h4 className="text-xs font-bold text-sky-400 uppercase tracking-widest flex items-center gap-1.5">
-                                      <Wrench className="w-4 h-4" />
-                                      <span>Maintenance Telemetry Suggestions</span>
-                                    </h4>
-                                    <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.maintenanceInsights}</p>
-                                  </div>
-
-                                  {/* Financial Insights */}
-                                  <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
-                                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
-                                      <DollarSign className="w-4 h-4" />
-                                      <span>Monthly Spending Insights</span>
-                                    </h4>
-                                    <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.spendingInsights}</p>
-                                  </div>
-
-                                  {/* Cost Warning */}
-                                  <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
-                                    <h4 className="text-xs font-bold text-rose-450 uppercase tracking-widest flex items-center gap-1.5">
-                                      <AlertCircle className="w-4 h-4" />
-                                      <span>Risk & Omission Warnings</span>
-                                    </h4>
-                                    <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.warningMessages}</p>
-                                  </div>
-
-                                  {/* Ownership Advice */}
-                                  <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
-                                    <h4 className="text-xs font-bold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
-                                      <Sliders className="w-4 h-4" />
-                                      <span>Parts & Garage Advice (Cambodia Markets)</span>
-                                    </h4>
-                                    <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.ownershipAdvice}</p>
-                                  </div>
-
-                                  {/* Cost prediction */}
-                                  <div className="p-5.5 bg-gradient-to-r from-purple-950/20 to-indigo-950/20 border border-purple-500/10 rounded-2xl md:col-span-2 space-y-1 text-center">
-                                    <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Upcoming 6-12 Months Prediction</span>
-                                    <p className="text-lg font-black text-slate-100">{aiInsights.costPrediction}</p>
-                                    <p className="text-[11px] text-slate-500">Predicted dynamic overheads matching historical timelines.</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="text-center py-14 max-w-md mx-auto space-y-3.5">
-                                  <div className="p-3 bg-purple-500/10 rounded-full border border-purple-500/20 w-12 h-12 flex items-center justify-center mx-auto text-purple-400">
-                                    <Brain className="w-6 h-6 shrink-0" />
-                                  </div>
-                                  <div>
-                                    <h4 className="text-sm font-bold text-slate-200">Insights engine waiting to start</h4>
-                                    <p className="text-xs text-slate-500">Provide odometer logging and maintenance histories, then trigger generative diagnostics to evaluate parts reliability advice tailored to Cambodia gridlock situations.</p>
-                                  </div>
-                                  <button
-                                    onClick={handleTriggerAiInsights}
-                                    className="px-4 py-2 text-xs font-bold bg-white/5 border border-white/10 hover:border-white/20 transition rounded-xl text-slate-300"
-                                  >
-                                    Initiate Engine Now
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -6904,6 +6431,413 @@ export default function Dashboard({
             </div>
           )}
 
+          {/* Subscreen: Tab 3: EXPENSE TRACKER */}
+          {activeSubTab === 'expenses' && selectedVehicle && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-4">
+              <div className="lg:col-span-5 space-y-6">
+                {/* Outflow tracker toggler */}
+                <div className="glass rounded-3xl p-5 space-y-4 shadow-md">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase">
+                      Log Custom Log Expense Receipt
+                    </h3>
+                    <button
+                      onClick={() => setShowAddExpensePanel(!showAddExpensePanel)}
+                      className="p-1 px-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] uppercase font-bold rounded-lg hover:bg-emerald-500/20 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{showAddExpensePanel ? "Collapse Form" : "Log Expense"}</span>
+                    </button>
+                  </div>
+
+                  {showAddExpensePanel ? (
+                    <form onSubmit={handleAddExpenseSubmit} className="space-y-4 text-xs">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Expense Category</label>
+                          <select
+                            value={expCategory}
+                            onChange={(e) => setExpCategory(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-100 placeholder-slate-500 text-slate-300 font-medium"
+                          >
+                            {['Fuel', 'Oil change', 'Maintenance', 'Repair', 'Spare parts', 'Tire', 'Battery', 'Car wash', 'Parking', 'Toll fee', 'Insurance', 'Road tax', 'Loan payment', 'Accessories', 'Emergency repair', 'Other'].map(cat => (
+                              <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Amount spent (USD)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={expAmount}
+                            onChange={(e) => setExpAmount(e.target.value)}
+                            required
+                            placeholder="e.g., 40.00"
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Registered Date</label>
+                          <input
+                            type="date"
+                            value={expDate}
+                            onChange={(e) => setExpDate(e.target.value)}
+                            required
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Odometer Checkpoint (km)</label>
+                          <input
+                            type="number"
+                            value={expMileage}
+                            onChange={(e) => setExpMileage(e.target.value)}
+                            placeholder="Odometer limit to cross"
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Vendor Garage / Shop</label>
+                          <input
+                            type="text"
+                            value={expProvider}
+                            onChange={(e) => setExpProvider(e.target.value)}
+                            placeholder="e.g., Tela Gas, ABA payment"
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Payment Method</label>
+                          <select
+                            value={expPaymentMethod}
+                            onChange={(e) => setExpPaymentMethod(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
+                          >
+                            <option value="ABA Pay">ABA Pay (QR)</option>
+                            <option value="Cash">Cash (Standard KHR/USD)</option>
+                            <option value="Wing">Wing transfer</option>
+                            <option value="Credit Card">Credit Card</option>
+                            <option value="Other">Other Gateway</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Notes & Description</label>
+                        <input
+                          type="text"
+                          value={expNotes}
+                          onChange={(e) => setExpNotes(e.target.value)}
+                          placeholder="Warranty duration or receipt code values"
+                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs hover:bg-emerald-600 transition"
+                      >
+                        Register Financial Outflow
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="space-y-2 text-xs">
+                      <p className="text-slate-400 leading-relaxed">
+                        Log fuel fillings, spare parts receipt logs, car washes and municipal parking coupons to compile automated visual reports and predict monthly car ownership overheads.
+                      </p>
+                      <button 
+                        onClick={() => setShowAddExpensePanel(true)}
+                        className="w-full py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition text-slate-350 font-bold"
+                      >
+                        Launch Log Form View
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* SVG Visual Spend stats box */}
+                <div className="glass rounded-3xl p-5 space-y-4 shadow-md">
+                  {renderSVGSpendGraph()}
+                </div>
+              </div>
+
+              {/* Expense records layout list */}
+              <div className="lg:col-span-7 glass rounded-3xl p-5 space-y-4 shadow-md">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span>Outflow Ledger & Invoices ({activeExpenses.length})</span>
+                  </h3>
+                  <span className="text-xs font-semibold text-emerald-400 font-mono">Month dynamic limit: active</span>
+                </div>
+
+                <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-2 no-scrollbar text-xs">
+                  {activeExpenses.map(item => (
+                    <div key={item.id} className="p-3 bg-white/3 hover:bg-white/5 border border-white/5 rounded-xl flex items-center justify-between gap-3 text-xs transition">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg">
+                          <DollarSign className="w-4.5 h-4.5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-200">{item.category}</span>
+                            <span className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-400 font-mono tracking-tighter uppercase font-bold">{item.paymentMethod}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-500 block">{item.date} • {item.provider} {item.mileage > 0 ? `• Odo ${item.mileage.toLocaleString()} km` : ''}</span>
+                          {item.notes && <p className="text-slate-400 text-[11px] mt-1 leading-normal italic">Notes: {item.notes}</p>}
+                        </div>
+                      </div>
+                      <div className="text-right flex flex-col items-end gap-1 font-mono">
+                        <span className="text-sm font-bold text-sky-450">-${item.amount} USD</span>
+                        <button
+                          onClick={() => handleDeleteExpense(item.id)}
+                          className="text-[10px] text-slate-500 hover:text-rose-400 font-bold hover:underline"
+                        >
+                          delete record
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {activeExpenses.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                      No expenses logged. Add synthetic fuel items or accessories to review distributions.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Subscreen: Tab 4: REMINDERS PANEL */}
+          {activeSubTab === 'reminders' && selectedVehicle && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pb-4">
+              <div className="lg:col-span-5 space-y-6">
+                {/* Custom Scheduler */}
+                <div className="glass rounded-3xl p-5 space-y-4 shadow-md">
+                  <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                    <h3 className="text-xs font-bold text-slate-400 tracking-wider uppercase">
+                      Configure Custom Reminder
+                    </h3>
+                    <button
+                      onClick={() => setShowAddReminderPanel(!showAddReminderPanel)}
+                      className="p-1 px-2.5 bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px] uppercase font-bold rounded-lg hover:bg-sky-500/20 transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{showAddReminderPanel ? "Collapse" : "Add Alert"}</span>
+                    </button>
+                  </div>
+
+                  {showAddReminderPanel ? (
+                    <form onSubmit={handleAddReminderSubmit} className="space-y-4 text-xs font-sans">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Alert Title / Task Name</label>
+                        <input
+                          type="text"
+                          value={remTitle}
+                          onChange={(e) => setRemTitle(e.target.value)}
+                          placeholder="e.g., Annual road tax check Forte, Left suspension vibration"
+                          required
+                          className="w-full bg-white/5 border border-white/10 p-2 rounded-xl text-slate-100"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Reminder Category</label>
+                          <select
+                            value={remCategory}
+                            onChange={(e) => setRemCategory(e.target.value)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl"
+                          >
+                            <option value="Oil change">Oil change timing</option>
+                            <option value="Tire change">Tire rotate / replace</option>
+                            <option value="Battery check">Battery check review</option>
+                            <option value="Brake inspection">Brake inspection check</option>
+                            <option value="Insurance renewal">Insurance renewal</option>
+                            <option value="Vehicle tax renewal">Vehicle tax renewal</option>
+                            <option value="Car wash">Car wash schedule</option>
+                            <option value="Custom reminder">My Custom alert</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Trigger Formula</label>
+                          <select
+                            value={remType}
+                            onChange={(e) => setRemType(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-100"
+                          >
+                            <option value="date_based">Date limits only</option>
+                            <option value="mileage_based">Odometer mileage only</option>
+                            <option value="date_and_mileage">Date and Mileage both</option>
+                            <option value="repeating">Repeating interval</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Due Date Limits (Optional)</label>
+                          <input
+                            type="date"
+                            value={remDueDate}
+                            onChange={(e) => setRemDueDate(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Due Odometer mileage (km)</label>
+                          <input
+                            type="number"
+                            value={remDueMileage}
+                            onChange={(e) => setRemDueMileage(e.target.value)}
+                            placeholder="e.g. 185000"
+                            className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Repeat Cadence</label>
+                          <select
+                            value={remRepeatType}
+                            onChange={(e) => setRemRepeatType(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl"
+                          >
+                            <option value="none">One-time check</option>
+                            <option value="monthly">Monthly cycle</option>
+                            <option value="every_6_months">Every 6 months</option>
+                            <option value="yearly">Every year (Annual slip)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Severity Priority</label>
+                          <select
+                            value={remPriority}
+                            onChange={(e) => setRemPriority(e.target.value as any)}
+                            className="w-full bg-slate-900 border border-white/10 p-2 text-xs rounded-xl text-slate-150"
+                          >
+                            <option value="Low">Low priority</option>
+                            <option value="Medium">Medium scale</option>
+                            <option value="High">High attention</option>
+                            <option value="Emergency">Urgent Emergency</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Action description steps</label>
+                        <input
+                          type="text"
+                          value={remNotes}
+                          onChange={(e) => setRemNotes(e.target.value)}
+                          placeholder="e.g. Bring to Angkor Auto Repair before upcoming rain slip"
+                          className="w-full bg-white/5 border border-white/10 p-2 text-xs rounded-xl"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={remSaving}
+                        className="w-full py-2.5 bg-sky-500 text-slate-950 font-bold rounded-xl hover:bg-sky-600 transition"
+                      >
+                        {remSaving ? "Saving alerts database..." : "Settle Smart Alert"}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="space-y-2 text-xs text-slate-400 leading-normal font-medium">
+                      Configure dynamic reminders matching dates or odometer targets. The vehicle calculates safety ranges to flag warning signs properly ahead of monsoon cycles.
+                      <button
+                        onClick={() => setShowAddReminderPanel(true)}
+                        className="w-full py-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 text-slate-300 font-bold transition mt-2 cursor-pointer"
+                      >
+                        Open alert schedule setup Form
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Reminders List Column */}
+              <div className="lg:col-span-7 glass rounded-3xl p-5 space-y-4 shadow-md">
+                <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <h3 className="text-sm font-bold text-slate-100 uppercase tracking-widest">
+                    Telemetry Checkpoints ({reminders.length})
+                  </h3>
+                  {reminderLoading && <span className="text-xs text-sky-400 animate-pulse">Syncing checklists...</span>}
+                </div>
+
+                <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 no-scrollbar text-xs">
+                  {reminders.map(item => (
+                    <div key={item.id} className="p-4 bg-white/3 hover:bg-white/5 border border-white/5 rounded-2xl space-y-3 transition">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              item.status === 'Overdue' ? 'bg-rose-500 text-white' : item.status === 'Due soon' ? 'bg-amber-400 text-slate-900' : 'bg-emerald-600 text-white'
+                            }`}>
+                              {item.status}
+                            </span>
+                            <span className="text-slate-500 text-[10px] font-bold font-mono">ID: {item.id}</span>
+                          </div>
+                          <h4 className="text-base font-bold text-slate-200 pt-1 leading-snug">{item.title}</h4>
+                        </div>
+                        {item.priority === 'High' || item.priority === 'Emergency' ? (
+                          <span className="p-1 bg-rose-500/10 text-rose-450 border border-rose-500/20 text-[9px] font-bold uppercase rounded leading-none shrink-0">CRITICAL ASPECT</span>
+                        ) : null}
+                      </div>
+
+                      <p className="text-slate-350 leading-relaxed text-[11px]">{item.reason}</p>
+                      
+                      {item.action && (
+                        <div className="flex items-start gap-1 p-2 px-3 bg-white/5 rounded-xl border border-white/5 text-[11px] text-slate-400">
+                          <Info className="w-3.5 h-3.5 text-sky-400 shrink-0 mt-0.5" />
+                          <span><strong>Expert Action:</strong> {item.action}</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-4 text-[10px] text-slate-500 font-medium">
+                        {item.dueDate && <span>Date Deadline: {item.dueDate}</span>}
+                        {item.dueMileage && <span>Odo Target: {item.dueMileage.toLocaleString()} km</span>}
+                        {item.repeatType && item.repeatType !== 'none' && <span className="capitalize">Interval: {item.repeatType.replace(/_/g, ' ')}</span>}
+                      </div>
+
+                      <div className="flex justify-between items-center border-t border-white/5 pt-3">
+                        <button
+                          onClick={() => handleSnoozeReminder(item.id)}
+                          className="px-3 py-1 bg-white/5 hover:bg-white/10 text-slate-300 font-bold rounded-lg border border-white/10 text-[10px] uppercase transition cursor-pointer"
+                        >
+                          Snooze 30 Days
+                        </button>
+                        <button
+                          onClick={() => handleCompleteReminder(item.id)}
+                          className="px-3.5 py-1 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold rounded-lg text-[10px] uppercase transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Mark Done</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {reminders.length === 0 && (
+                    <div className="text-center py-10 text-slate-500">
+                      No active telemetry checkpoints found. Add custom targets to trigger.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Subscreen: Tab 5: DOCUMENT WALLET (STANDALONE ARCHIVE VIEW) */}
           {activeSubTab === 'documents' && (
             <div className="space-y-6">
@@ -6967,6 +6901,101 @@ export default function Dashboard({
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Subscreen: Tab 6: AI INSIGHTS DIAGNOSTICS */}
+          {activeSubTab === 'ai' && selectedVehicle && (
+            <div className="space-y-6">
+              <div className="glass rounded-3xl p-6 space-y-5 relative overflow-hidden shadow-xl">
+                <div className="absolute right-0 top-0 w-80 h-40 bg-purple-500/5 rounded-full blur-3xl pointer-events-none select-none"></div>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div>
+                    <div className="flex items-center gap-1 text-purple-400 text-xs font-bold tracking-widest uppercase mb-1">
+                      <Brain className="w-4 h-4 animate-pulse" />
+                      <span>Gemini 3.5 Flash Diagnostics Engine</span>
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-150">Vulnerability and Ownership Optimization</h2>
+                    <p className="text-xs text-slate-400">Retreive custom insights matching tracked odometer points and expense allocations in Cambodia gridlock contexts.</p>
+                  </div>
+                  <button
+                    onClick={handleTriggerAiInsights}
+                    disabled={aiLoading}
+                    className="p-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-[1.02] text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs transition shadow-lg shrink-0 cursor-pointer"
+                  >
+                    {aiLoading ? <RotateCcw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    <span>{aiInsights ? "Re-evaluate Insights" : "Generate AI Insights"}</span>
+                  </button>
+                </div>
+
+                {aiLoading ? (
+                  <div className="py-20 text-center space-y-3.5">
+                    <div className="w-10 h-10 border-4 border-sky-400/20 border-t-sky-400 rounded-full animate-spin mx-auto"></div>
+                    <p className="text-xs text-slate-400 animate-pulse">Running advanced machine learning diagnostics on vehicle files...</p>
+                  </div>
+                ) : aiInsights ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1 text-xs">
+                    {/* Maintenance Suggestions */}
+                    <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
+                      <h4 className="text-xs font-bold text-sky-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Wrench className="w-4 h-4" />
+                        <span>Maintenance Telemetry Suggestions</span>
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.maintenanceInsights}</p>
+                    </div>
+
+                    {/* Financial Insights */}
+                    <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
+                      <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <DollarSign className="w-4 h-4" />
+                        <span>Monthly Spending Insights</span>
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.spendingInsights}</p>
+                    </div>
+
+                    {/* Cost Warning */}
+                    <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
+                      <h4 className="text-xs font-bold text-rose-450 uppercase tracking-widest flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>Risk & Omission Warnings</span>
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.warningMessages}</p>
+                    </div>
+
+                    {/* Ownership Advice */}
+                    <div className="p-4.5 bg-white/3 border border-white/5 rounded-2xl space-y-2">
+                      <h4 className="text-xs font-bold text-violet-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <Sliders className="w-4 h-4" />
+                        <span>Parts & Garage Advice (Cambodia Markets)</span>
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed leading-normal">{aiInsights.ownershipAdvice}</p>
+                    </div>
+
+                    {/* Cost prediction */}
+                    <div className="p-5.5 bg-gradient-to-r from-purple-950/20 to-indigo-950/20 border border-purple-500/10 rounded-2xl md:col-span-2 space-y-1 text-center">
+                      <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Upcoming 6-12 Months Prediction</span>
+                      <p className="text-lg font-black text-slate-100">{aiInsights.costPrediction}</p>
+                      <p className="text-[11px] text-slate-500">Predicted dynamic overheads matching historical timelines.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-14 max-w-md mx-auto space-y-3.5">
+                    <div className="p-3 bg-purple-500/10 rounded-full border border-purple-500/20 w-12 h-12 flex items-center justify-center mx-auto text-purple-400">
+                      <Brain className="w-6 h-6 shrink-0" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-200">Insights engine waiting to start</h4>
+                      <p className="text-xs text-slate-500">Provide odometer logging and maintenance histories, then trigger generative diagnostics to evaluate parts reliability advice tailored to Cambodia gridlock situations.</p>
+                    </div>
+                    <button
+                      onClick={handleTriggerAiInsights}
+                      className="px-4 py-2 text-xs font-bold bg-white/5 border border-white/10 hover:border-white/20 transition rounded-xl text-slate-300"
+                    >
+                      Initiate Engine Now
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

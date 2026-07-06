@@ -214,12 +214,31 @@ export default function RemindersPanel({
   const [auditMessage, setAuditMessage] = useState<string | null>(null);
   const [notifyingMilestoneKey, setNotifyingMilestoneKey] = useState<string | null>(null);
 
+  // Browser Push Notification Center & Simulator States
+  const [activePushFilter, setActivePushFilter] = useState<'all' | 'urgent' | 'routine'>('all');
+  const [livePushToast, setLivePushToast] = useState<{ title: string; message: string; priority: 'Low' | 'Medium' | 'High' | 'Critical'; id: string } | null>(null);
+  const [simulatedPushCategory, setSimulatedPushCategory] = useState<string>("Engine Oil Change");
+  const [simulatedPushTitle, setSimulatedPushTitle] = useState<string>("");
+  const [simulatedPushMessage, setSimulatedPushMessage] = useState<string>("");
+  const [simulatedPushPriority, setSimulatedPushPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>("High");
+  const [simulatedPushLoading, setSimulatedPushLoading] = useState(false);
+
   // Loaded reminders & notifications synchronizer
   useEffect(() => {
     fetchRemindersAndNotifications();
     fetchNotificationSettings();
     fetchTelegramStatus();
   }, [selectedVehicle, records]);
+
+  // Live browser push toast auto-dismiss timer (8 seconds)
+  useEffect(() => {
+    if (livePushToast) {
+      const timer = setTimeout(() => {
+        setLivePushToast(null);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [livePushToast]);
 
   const fetchRemindersAndNotifications = async () => {
     if (!selectedVehicle) return;
@@ -740,6 +759,115 @@ export default function RemindersPanel({
       setTimeout(() => setAdminSuccessMsg(''), 5500);
       setAdminBroadcastTitle('');
       setAdminBroadcastMessage('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Dispatch simulated web browser push notification
+  const handleDispatchPushNotification = async (titleOverride?: string, messageOverride?: string, priorityOverride?: 'Low' | 'Medium' | 'High' | 'Critical') => {
+    if (!selectedVehicle) return;
+    setSimulatedPushLoading(true);
+
+    const title = titleOverride || simulatedPushTitle || `🔧 Maintenance Check Recommended`;
+    const message = messageOverride || simulatedPushMessage || `A standard scheduled maintenance assessment is due for your vehicle. Monitor fluids and filters carefully under hot dusty Cambodia roads.`;
+    const priority = priorityOverride || simulatedPushPriority;
+
+    try {
+      const res = await fetch("/api/notifications/trigger-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventType: 'custom_push',
+          vehicleId: selectedVehicle.id,
+          customTitle: title,
+          customMessage: message,
+          channel: 'Push',
+          priority: priority,
+          category: 'maintenance'
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const notification = data.notification || { id: `push-${Date.now()}`, title, message, priority };
+        
+        // Trigger live browser toast mock popup
+        setLivePushToast({
+          id: notification.id,
+          title: notification.title,
+          message: notification.message,
+          priority: notification.priority || priority
+        });
+
+        // Play alert sound
+        playChime(priority === 'High' || priority === 'Critical' ? 'alert' : 'success');
+
+        // Clear custom inputs
+        if (!titleOverride) {
+          setSimulatedPushTitle("");
+          setSimulatedPushMessage("");
+        }
+
+        // Reload lists
+        fetchRemindersAndNotifications();
+      }
+    } catch (err) {
+      console.error("Failed to trigger simulated push alert", err);
+    } finally {
+      setSimulatedPushLoading(false);
+    }
+  };
+
+  // Seed standard browser push alerts
+  const handleAutoSeedPushNotifications = async () => {
+    if (!selectedVehicle) return;
+    const presets = [
+      {
+        title: "🚨 Critical: Engine Oil Pressure Low",
+        message: "Cambodia high-heat driving limits reached. Motor oil viscosity under minimum thresholds. Immediate replacement recommended to avoid high DNA engine scoring.",
+        priority: "Critical" as const
+      },
+      {
+        title: "🚨 Urgent: Front Brake Pads Inspection Required",
+        message: "Odometer warning limits triggered. Heavy mud and fine road grit in rainy season has eroded pad materials to critical 2.5mm depth.",
+        priority: "High" as const
+      },
+      {
+        title: "📅 Routine: 10,000 km Tire Rotation Check",
+        message: "Even tyre tread degradation check is due to sustain safe Cambodia highway traction. Schedule rapid tire rotation and wheel geometry alignment check.",
+        priority: "Medium" as const
+      },
+      {
+        title: "📅 Routine: Windshield Wiper Blade Swap",
+        message: "Pre-Monsoon safety check: Rubber wipers drying out due to harsh Phnom Penh solar exposure. Swap blades to secure wet-weather driving clarity.",
+        priority: "Low" as const
+      },
+      {
+        title: "🚨 Critical: EV Hybrid Fan Filter Saturation",
+        message: "High temperature alarm. Dust and fine Cambodia silt clogging rear ventilation grills of your high voltage battery compartment. Clean instantly to avoid overheating.",
+        priority: "Critical" as const
+      }
+    ];
+
+    try {
+      for (const item of presets) {
+        await fetch("/api/notifications/trigger-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventType: 'custom_push',
+            vehicleId: selectedVehicle.id,
+            customTitle: item.title,
+            customMessage: item.message,
+            channel: 'Push',
+            priority: item.priority,
+            category: 'maintenance'
+          })
+        });
+      }
+      playChime('success');
+      fetchRemindersAndNotifications();
     } catch (e) {
       console.error(e);
     }
@@ -1949,6 +2077,356 @@ export default function RemindersPanel({
             );
           })()}
 
+          {/* SIMULATED WEB BROWSER PUSH NOTIFICATION CENTER */}
+          <div id="push-notification-center" className="glass rounded-3xl p-6 border border-white/10 space-y-6 shadow-2xl relative overflow-hidden">
+            {/* Ambient glows inside the card */}
+            <div className="absolute right-0 top-0 w-48 h-48 bg-rose-500/5 rounded-full blur-2xl pointer-events-none"></div>
+            <div className="absolute left-0 bottom-0 w-48 h-48 bg-sky-500/5 rounded-full blur-2xl pointer-events-none"></div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4 relative z-10 text-left">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-gradient-to-tr from-sky-500/10 to-teal-500/10 border border-sky-400/20 text-sky-400 shrink-0">
+                  <Smartphone className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-extrabold text-white tracking-wide uppercase flex flex-wrap items-center gap-2">
+                    <span>Web Push Notification Center</span>
+                    <span className="text-[9px] bg-sky-500/10 text-sky-300 font-normal border border-sky-500/20 px-2 py-0.5 rounded-full uppercase tracking-wider font-sans">
+                      Simulated Push Logs
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    Live browser notification pipeline for upcoming maintenance tasks, separating safety-critical events from routine upkeep.
+                  </p>
+                </div>
+              </div>
+
+              {notifications.filter(n => n.channel === 'Push').length > 0 && (
+                <button 
+                  onClick={async () => {
+                    if (confirm("Are you sure you want to clear simulated web push logs history?")) {
+                      await handleClearNotifications();
+                    }
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-rose-400 font-bold flex items-center gap-1 bg-white/3 hover:bg-white/5 border border-white/5 px-3 py-1.5 rounded-xl cursor-pointer transition shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Push History</span>
+                </button>
+              )}
+            </div>
+
+            {/* SECTION A: WEB PUSH SIMULATION PANEL */}
+            <div className="bg-slate-950/55 p-4 rounded-2xl border border-white/5 space-y-4 relative z-10 text-xs text-left">
+              <div className="flex items-center gap-2 text-sky-300 font-bold uppercase text-[10px] tracking-wider pb-1.5 border-b border-white/5">
+                <Sliders className="w-4 h-4 text-sky-400" />
+                <span>Simulate & Dispatch Upcoming Maintenance Push Notification</span>
+              </div>
+
+              {/* Presets Grid */}
+              <div className="space-y-2">
+                <span className="text-[9px] text-slate-400 uppercase font-bold tracking-widest block">Quick Simulation Presets:</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  <div className="space-y-1.5">
+                    <span className="text-[8px] text-rose-400 font-extrabold uppercase tracking-wider block">🚨 Urgent Maintenance Alerts</span>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => handleDispatchPushNotification(
+                          "🚨 Critical: Engine Oil Pressure Overdue",
+                          "High friction alert: Odometer is 500 km beyond safe limits. Urgent oil replacement required to maintain critical warranty & engine safety indexes.",
+                          "Critical"
+                        )}
+                        className="py-1.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[10px] text-left rounded-xl font-medium transition cursor-pointer flex items-center justify-between"
+                      >
+                        <span>Low Engine Oil Pressure Warning</span>
+                        <span className="bg-rose-500/20 text-rose-300 text-[7px] px-1.5 py-0.2 rounded font-extrabold animate-pulse">URGENT</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDispatchPushNotification(
+                          "🚨 Urgent: Brake Rotor Wear Limit Reached",
+                          "Braking safety hazard: Rear brake pads & rotor calipers are at 2.5mm thickness limit. Silt and Phnom Penh street grit are accelerating friction rot.",
+                          "High"
+                        )}
+                        className="py-1.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[10px] text-left rounded-xl font-medium transition cursor-pointer flex items-center justify-between"
+                      >
+                        <span>Rear Brake Caliper Pad Overhaul</span>
+                        <span className="bg-rose-500/20 text-rose-300 text-[7px] px-1.5 py-0.2 rounded font-extrabold animate-pulse">URGENT</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <span className="text-[8px] text-sky-400 font-extrabold uppercase tracking-wider block">📅 Routine Upkeep Advisories</span>
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => handleDispatchPushNotification(
+                          "📅 Routine: 10,000 km Tire Rotation Check",
+                          "Tire alignment advisory: Ensure uniform tread wear by checking tire geometry and performing tire rotation to sustain Phnom Penh highway safety.",
+                          "Medium"
+                        )}
+                        className="py-1.5 px-3 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/15 text-[10px] text-left rounded-xl font-medium transition cursor-pointer flex items-center justify-between"
+                      >
+                        <span>10k Odometer Tire Rotation</span>
+                        <span className="bg-slate-850 text-sky-400 text-[7px] px-1.5 py-0.2 border border-sky-550/20 rounded font-bold">ROUTINE</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDispatchPushNotification(
+                          "📅 Standard: Cambodia Monsoon Wiper Swap",
+                          "Pre-Rain checks: Standard wiper blade deterioration. UV degradation reduces wet monsoon driving visibility. Recommend rapid silicone replacement.",
+                          "Low"
+                        )}
+                        className="py-1.5 px-3 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/15 text-[10px] text-left rounded-xl font-medium transition cursor-pointer flex items-center justify-between"
+                      >
+                        <span>Monsoon Wiper Blade Check</span>
+                        <span className="bg-slate-850 text-sky-400 text-[7px] px-1.5 py-0.2 border border-sky-550/20 rounded font-bold">ROUTINE</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom push manual creator */}
+              <div className="bg-black/30 p-3.5 rounded-xl border border-white/5 space-y-3">
+                <span className="text-[9px] text-slate-400 uppercase font-extrabold tracking-widest block">Or Dispatch Custom Maintenance Alert:</span>
+                
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                  <div className="md:col-span-5 space-y-1">
+                    <label className="text-[10px] text-slate-400 uppercase tracking-wider">Custom Alert Title</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 🛠️ Urgent: Saturated Fuel Filter"
+                      value={simulatedPushTitle}
+                      onChange={(e) => setSimulatedPushTitle(e.target.value)}
+                      className="w-full bg-slate-950 p-2 text-xs rounded-lg border border-white/10 text-slate-200 focus:outline-none focus:border-sky-500"
+                    />
+                  </div>
+
+                  <div className="md:col-span-4 space-y-1">
+                    <label className="text-[10px] text-slate-400 uppercase tracking-wider">Alert Level / Urgency</label>
+                    <select
+                      value={simulatedPushPriority}
+                      onChange={(e) => setSimulatedPushPriority(e.target.value as any)}
+                      className="w-full bg-slate-950 p-2 text-xs rounded-lg border border-white/10 text-slate-300 focus:outline-none"
+                    >
+                      <option value="Critical">🔴 Urgent (Critical Level Alert)</option>
+                      <option value="High">🔴 Urgent (High Level Alert)</option>
+                      <option value="Medium">🔵 Routine (Medium Level Advice)</option>
+                      <option value="Low">🔵 Routine (Low Level Advisory)</option>
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-3 flex items-end">
+                    <button
+                      onClick={() => handleDispatchPushNotification()}
+                      disabled={simulatedPushLoading}
+                      className="w-full py-2 bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-600 hover:to-teal-600 font-extrabold text-[11px] text-slate-950 rounded-lg flex items-center justify-center gap-1.5 transition uppercase tracking-wider cursor-pointer"
+                    >
+                      {simulatedPushLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5 text-slate-950" />
+                      )}
+                      <span>Push Web Alert</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 uppercase tracking-wider">Push Body Message Description</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Saturated engine dust filters identified in high DNA vehicle telemetry log diagnostics. Clean filter or schedule quick workshop appointment."
+                    value={simulatedPushMessage}
+                    onChange={(e) => setSimulatedPushMessage(e.target.value)}
+                    className="w-full bg-slate-950 p-2 text-xs rounded-lg border border-white/10 text-slate-200 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION B: BROWSER PUSH LOGS HISTORY LIST */}
+            <div className="space-y-3.5 relative z-10 text-left">
+              {(() => {
+                const pushHistory = notifications.filter(n => n.channel === 'Push');
+                const urgentCount = pushHistory.filter(n => n.priority === 'High' || n.priority === 'Critical' || n.priority === 'Emergency').length;
+                const routineCount = pushHistory.filter(n => n.priority === 'Low' || n.priority === 'Medium').length;
+
+                const filteredPushes = pushHistory.filter(n => {
+                  if (activePushFilter === 'all') return true;
+                  if (activePushFilter === 'urgent') return n.priority === 'High' || n.priority === 'Critical' || n.priority === 'Emergency';
+                  if (activePushFilter === 'routine') return n.priority === 'Low' || n.priority === 'Medium';
+                  return true;
+                });
+
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                      <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                        <span className="flex items-center gap-1.5">
+                          <History className="w-4 h-4 text-emerald-400" />
+                          <span>Push Logs: <strong className="text-white font-mono">{pushHistory.length} Total</strong></span>
+                        </span>
+                        <span className="hidden sm:inline text-slate-600">|</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                          <span>Urgent: <strong className="text-rose-400 font-mono">{urgentCount}</strong></span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                          <span>Routine: <strong className="text-sky-400 font-mono">{routineCount}</strong></span>
+                        </span>
+                      </div>
+
+                      {/* Push filters switches */}
+                      <div className="flex items-center bg-slate-950 p-1 rounded-xl text-[9px] font-bold uppercase border border-white/5">
+                        <button
+                          onClick={() => { setActivePushFilter('all'); playChime('success'); }}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${activePushFilter === 'all' ? 'bg-sky-500 text-slate-950 font-extrabold' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          All ({pushHistory.length})
+                        </button>
+                        <button
+                          onClick={() => { setActivePushFilter('urgent'); playChime('success'); }}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${activePushFilter === 'urgent' ? 'bg-rose-500/25 text-rose-300 border border-rose-500/30' : 'text-slate-400 hover:text-rose-400'}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-550 animate-pulse" />
+                          <span>Urgent ({urgentCount})</span>
+                        </button>
+                        <button
+                          onClick={() => { setActivePushFilter('routine'); playChime('success'); }}
+                          className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${activePushFilter === 'routine' ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' : 'text-slate-400 hover:text-sky-300'}`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                          <span>Routine ({routineCount})</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scroller stack for push log feed items */}
+                    <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                      {filteredPushes.map((not) => {
+                        const isUrgent = not.priority === 'High' || not.priority === 'Critical' || not.priority === 'Emergency';
+                        
+                        return (
+                          <div 
+                            key={not.id}
+                            className={`p-4 rounded-2xl border transition duration-200 text-xs relative overflow-hidden ${
+                              isUrgent 
+                                ? 'bg-rose-950/15 border-rose-500/35 shadow-lg shadow-rose-950/20' 
+                                : 'bg-slate-900/40 border-slate-700/20'
+                            } ${not.status === 'read' ? 'opacity-60' : ''}`}
+                          >
+                            {/* Accent indicators on cards */}
+                            <div className={`absolute top-0 left-0 bottom-0 w-1 ${isUrgent ? 'bg-rose-500' : 'bg-sky-400'}`}></div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pl-2">
+                              <div className="flex gap-3 text-left">
+                                <div className={`p-2 border rounded-xl h-max shrink-0 bg-slate-950 ${isUrgent ? 'border-rose-500/20 text-rose-400' : 'border-sky-500/10 text-sky-400'}`}>
+                                  {isUrgent ? <ShieldAlert className="w-4 h-4 animate-bounce" /> : <Wrench className="w-4 h-4" />}
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="font-extrabold text-white text-[13px] tracking-tight">{not.title}</span>
+                                    
+                                    <span className={`text-[8px] font-extrabold uppercase border px-2 py-0.2 rounded-full font-sans tracking-wide ${
+                                      isUrgent 
+                                        ? 'bg-rose-500/25 text-rose-300 border-rose-500/40 animate-pulse font-black' 
+                                        : 'bg-sky-500/10 text-sky-400 border-sky-550/20 font-bold'
+                                    }`}>
+                                      {isUrgent ? "🚨 URGENT" : "📅 ROUTINE"}
+                                    </span>
+
+                                    {not.status === 'unread' && (
+                                      <span className="bg-emerald-500 text-slate-950 text-[8px] px-1.5 py-0.2 rounded font-sans uppercase font-extrabold tracking-widest">NEW</span>
+                                    )}
+                                  </div>
+
+                                  <p className="text-slate-200 text-xs leading-relaxed max-w-xl">
+                                    {not.message}
+                                  </p>
+
+                                  <div className="flex flex-wrap items-center gap-3 text-[10px] text-slate-400 pt-1.5 font-mono">
+                                    <span className="bg-white/5 border border-white/5 text-slate-300 px-2 py-0.2 rounded font-sans text-[8px] uppercase tracking-wide">
+                                      Browser Push Channel
+                                    </span>
+                                    <span>•</span>
+                                    <span>Urgency: <strong className={isUrgent ? "text-rose-400" : "text-sky-450"}>{not.priority || 'Medium'}</strong></span>
+                                    <span>•</span>
+                                    <span>{new Date(not.sentAt).toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Actions strip */}
+                              <div className="flex flex-row sm:flex-col items-center sm:items-end gap-1.5 shrink-0 self-end sm:self-start pt-2 sm:pt-0">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    playChime(isUrgent ? 'alert' : 'success');
+                                  }}
+                                  className="p-1.5 hover:bg-white/5 border border-white/5 rounded-xl text-slate-400 hover:text-sky-300 cursor-pointer text-[10px] flex items-center gap-1 transition"
+                                  title="Replay simulated browser ring tone"
+                                >
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span className="sm:hidden text-[9px]">Test Sound</span>
+                                </button>
+
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await handleMarkNotifRead(not.id);
+                                    playChime('success');
+                                  }}
+                                  disabled={not.status === 'read'}
+                                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider transition ${
+                                    not.status === 'read'
+                                      ? 'bg-white/5 text-slate-500 cursor-not-allowed'
+                                      : 'bg-white/10 text-white hover:bg-white/15 cursor-pointer'
+                                  }`}
+                                >
+                                  Read
+                                </button>
+
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteNotificationLocal(not.id); }}
+                                  className="p-1.5 text-slate-500 hover:text-rose-400 rounded-xl bg-white/3 hover:bg-rose-500/10 cursor-pointer"
+                                  title="Delete log permanently"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {filteredPushes.length === 0 && (
+                        <div className="py-12 text-center text-slate-500 text-xs bg-slate-950/30 rounded-2xl border border-dashed border-white/5">
+                          <div className="p-3 bg-white/2 rounded-full border border-dashed border-white/5 w-max mx-auto mb-3">
+                            <Smartphone className="w-6 h-6 text-slate-600 animate-bounce" />
+                          </div>
+                          <p className="font-semibold text-slate-400 mb-1">No Simulated Browser Push History Loaded</p>
+                          <p className="text-[10px] text-slate-500 max-w-sm mx-auto mb-4 px-4 leading-relaxed">
+                            Start testing now! Use the simulator presets above or trigger automatic seeding to populate logs instantly.
+                          </p>
+                          <button
+                            onClick={handleAutoSeedPushNotifications}
+                            className="px-4 py-2 bg-gradient-to-r from-sky-500 to-teal-500 hover:from-sky-600 hover:to-teal-600 text-slate-950 text-[10px] font-extrabold rounded-xl uppercase tracking-wider cursor-pointer shadow-md"
+                          >
+                            🚀 Auto-Seed 5 Demo Push Alerts
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* PLAYGROUND ALERT CENTER NOTIFICATION CENTER */}
           <div className="glass rounded-3xl p-5 border border-white/5 space-y-4 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-3">
@@ -2988,6 +3466,50 @@ export default function RemindersPanel({
               >
                 Snooze Alarm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING LIVE BROWSER WEB PUSH TOAST POPUP */}
+      {livePushToast && (
+        <div className="fixed top-4 right-4 z-50 max-w-sm bg-slate-950/95 border border-white/15 shadow-2xl rounded-2xl p-4 animate-slide-in backdrop-blur-md">
+          <div className="flex items-start gap-3">
+            <div className={`p-2 rounded-xl shrink-0 ${livePushToast.priority === 'High' || livePushToast.priority === 'Critical' ? 'bg-rose-500/20 border border-rose-500/40 text-rose-400 animate-pulse' : 'bg-sky-500/10 border border-sky-500/25 text-sky-400'}`}>
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1 text-left">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] text-slate-400 font-mono tracking-widest uppercase font-extrabold">Chrome Web Push Alert</span>
+                <button 
+                  onClick={() => setLivePushToast(null)}
+                  className="p-1 hover:bg-white/5 rounded-full text-slate-450 hover:text-white cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <h4 className="font-extrabold text-white text-xs">{livePushToast.title}</h4>
+              <p className="text-slate-300 text-[11px] leading-relaxed">{livePushToast.message}</p>
+              <div className="flex items-center gap-2 pt-2 text-[9px] uppercase tracking-wider font-extrabold">
+                <button 
+                  onClick={() => {
+                    setLivePushToast(null);
+                    const el = document.getElementById("push-notification-center");
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="px-2.5 py-1 bg-white/10 text-white hover:bg-white/15 rounded cursor-pointer"
+                >
+                  Open Alert Feed
+                </button>
+                <button 
+                  onClick={() => setLivePushToast(null)}
+                  className="px-2.5 py-1 text-slate-400 hover:text-slate-200 rounded cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
         </div>

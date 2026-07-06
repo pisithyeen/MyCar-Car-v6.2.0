@@ -1,5 +1,5 @@
 {
-  "name": "APP MyCar Care KH - Version: V6.2.0 ",
+  "name": "MyCar Care KH",
   "description": "AI-powered vehicle maintenance, diagnostics, and service platform for Cambodia. View vehicle profiles, generate weakness reports, track maintenance schedules, check symptoms with AI, locate Phnom Penh garages, and browse the integrated Spare Parts Classifieds \u0026 Barter Exchange Marketplace. MyCar Care KH — App Product Document\n\nLatest Working Version: V6.1.0 — Marketplace + Vehicle Care Ecosystem\nPrepared for: MyCar Care KH App Development / Investor Pitch / Developer Handoff\nDate: 8 June 2026",
   "requestFramePermissions": [
     "geolocation",

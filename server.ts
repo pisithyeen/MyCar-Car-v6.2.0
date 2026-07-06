@@ -70,13 +70,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 12 345 678",
     role: "Vehicle Owner",
     location: "Phnom Penh",
-    status: "Approved",
-    active_role: "Vehicle Owner",
-    active_vehicle_id: "v1",
-    active_business_id: "biz-123",
-    active_module: "garage",
-    permission_group: "Garage Manager",
-    user_roles: ["Vehicle Owner", "Vehicle Manager", "Driver", "Garage Owner", "Spare Part Shop", "Admin"]
+    status: "Approved"
   },
   {
     id: 2,
@@ -87,12 +81,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Siem Reap",
     status: "Pending",
     businessName: "Angkor Speed Auto Repair",
-    licenseNumber: "Co-8271/2026-KH",
-    active_role: "Garage Owner",
-    active_business_id: "biz-456",
-    active_module: "garage",
-    permission_group: "Garage Manager",
-    user_roles: ["Garage Owner", "Garage Staff", "Spare Part Shop", "Freelance Mechanic"]
+    licenseNumber: "Co-8271/2026-KH"
   },
   {
     id: 3,
@@ -103,11 +92,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Pending",
     businessName: "TotalEnergies Sothearos Blvd",
-    licenseNumber: "Co-6211/2026-KH",
-    active_role: "Petrol Station Partner",
-    active_business_id: "biz-789",
-    active_module: "petrol_station",
-    user_roles: ["Petrol Station Partner", "EV Charging Station Partner"]
+    licenseNumber: "Co-6211/2026-KH"
   },
   {
     id: 4,
@@ -118,11 +103,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Sihanoukville",
     status: "Approved",
     businessName: "Sihanoukville Toyota Parts",
-    licenseNumber: "Co-1934/2026-KH",
-    active_role: "Spare Part Shop",
-    active_business_id: "biz-123",
-    active_module: "spare_part_shop",
-    user_roles: ["Spare Part Shop"]
+    licenseNumber: "Co-1934/2026-KH"
   },
   {
     id: 5,
@@ -133,10 +114,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Battambang",
     status: "Pending",
     businessName: "Sokna Express Towing",
-    licenseNumber: "Co-4188/2026-KH",
-    active_role: "Freelance Mechanic",
-    active_business_id: "biz-123",
-    user_roles: ["Freelance Mechanic"]
+    licenseNumber: "Co-4188/2026-KH"
   },
   {
     id: 6,
@@ -147,10 +125,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Suspended",
     businessName: "Phnom Penh Mobile Repair",
-    licenseNumber: "Co-4819/2026-KH",
-    active_role: "Freelance Mechanic",
-    active_business_id: "biz-123",
-    user_roles: ["Freelance Mechanic"]
+    licenseNumber: "Co-4819/2026-KH"
   },
   {
     id: 7,
@@ -159,9 +134,7 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 23 888 888",
     role: "Admin",
     location: "Phnom Penh",
-    status: "Approved",
-    active_role: "Admin",
-    user_roles: ["Admin"]
+    status: "Approved"
   }
 ];
 
@@ -3150,27 +3123,7 @@ app.get("/api/profile", async (req: Request, res: Response) => {
 
 // Update User Profile / Onboard / Switch Login
 app.put("/api/profile", async (req: Request, res: Response) => {
-  const { 
-    name, 
-    email, 
-    phone, 
-    role, 
-    location, 
-    businessName, 
-    licenseNumber, 
-    status, 
-    activatedModules, 
-    isMultiService,
-    active_role,
-    active_vehicle_id,
-    active_business_id,
-    active_module,
-    permission_group,
-    user_roles,
-    subscription_status,
-    subscription_plan
-  } = req.body;
-  
+  const { name, email, phone, role, location, businessName, licenseNumber, status, activatedModules, isMultiService } = req.body;
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
   }
@@ -3188,77 +3141,25 @@ app.put("/api/profile", async (req: Request, res: Response) => {
       status: status || defaultStatus
     });
 
-    activeProfile = {
-      ...activeProfile,
-      name,
-      email,
-      phone: phone || '',
-      role,
-      location: location || 'Phnom Penh',
-      status: status || defaultStatus,
-      businessName: businessName || undefined,
-      licenseNumber: licenseNumber || undefined,
-      activatedModules: activatedModules || undefined,
-      isMultiService: isMultiService || undefined,
-      active_role: active_role || role,
-      active_vehicle_id: active_vehicle_id || undefined,
-      active_business_id: active_business_id || undefined,
-      active_module: active_module || undefined,
-      permission_group: permission_group || undefined,
-      user_roles: user_roles || undefined,
-      subscription_status: subscription_status || undefined,
-      subscription_plan: subscription_plan || undefined
-    };
-
     if (dbUser) {
-      activeProfile.id = dbUser.id;
-    }
-    
-    // Also sync the simulated user in the database list
-    const simIdx = simulatedUsersDatabase.findIndex(u => u.email === email);
-    if (simIdx !== -1) {
-      simulatedUsersDatabase[simIdx] = {
-        ...simulatedUsersDatabase[simIdx],
-        ...activeProfile
+      activeProfile = {
+        id: dbUser.id,
+        name: dbUser.name,
+        email: dbUser.email,
+        phone: dbUser.phone || '',
+        role: dbUser.role as any,
+        location: dbUser.location || 'Phnom Penh',
+        status: dbUser.status as any,
+        businessName: dbUser.businessName || undefined,
+        licenseNumber: dbUser.licenseNumber || undefined,
+        activatedModules: activatedModules || undefined,
+        isMultiService: isMultiService || undefined
       };
     }
-
     res.json(activeProfile);
   } catch (err) {
     console.error("Error updates profile in Cloud SQL:", err);
     res.status(500).json({ error: "Cloud SQL sync fail" });
-  }
-});
-
-// Update specific active role, vehicle, and business preferences
-app.put("/api/profile/preferences", async (req: Request, res: Response) => {
-  const { active_role, active_vehicle_id, active_business_id } = req.body;
-
-  if (!activeProfile) {
-    return res.status(401).json({ error: "No active profile found. Please login first." });
-  }
-
-  try {
-    activeProfile = {
-      ...activeProfile,
-      active_role: active_role || activeProfile.active_role || activeProfile.role,
-      active_vehicle_id: active_vehicle_id !== undefined ? active_vehicle_id : activeProfile.active_vehicle_id,
-      active_business_id: active_business_id !== undefined ? active_business_id : activeProfile.active_business_id
-    };
-
-    // Synchronize to the simulated database array
-    const simIdx = simulatedUsersDatabase.findIndex(u => u.email === activeProfile.email);
-    if (simIdx !== -1) {
-      simulatedUsersDatabase[simIdx] = {
-        ...simulatedUsersDatabase[simIdx],
-        ...activeProfile
-      };
-    }
-
-    res.json(activeProfile);
-  } catch (err) {
-    console.error("Error updating preferences:", err);
-    res.status(500).json({ error: "Failed to update active preferences" });
   }
 });
 
@@ -5382,7 +5283,7 @@ app.post("/api/notifications/:id/reject", (req: Request, res: Response) => {
 
 // Trigger dynamic scenario notifications
 app.post("/api/notifications/trigger-event", (req: Request, res: Response) => {
-  const { eventType, vehicleId, text, customTitle, customMessage } = req.body;
+  const { eventType, vehicleId, text, customTitle, customMessage, channel } = req.body;
   
   const vehicle = vehicles.find(v => v.id === vehicleId) || vehicles[0] || { id: "v1", brand: "Toyota", model: "Tacoma", year: 2006, mileage: 180000 };
   const id = `notif-${Date.now()}`;
@@ -5533,11 +5434,11 @@ app.post("/api/notifications/trigger-event", (req: Request, res: Response) => {
     vehicleId: vehicle.id,
     title,
     message,
-    channel: 'In-App',
+    channel: channel || 'In-App',
     status: 'unread',
     sentAt: new Date().toISOString(),
-    category,
-    priority,
+    category: req.body.category || category,
+    priority: req.body.priority || priority,
     sourceType,
     actionLabel: actionLabel || undefined,
     actionUrl: actionUrl || undefined,

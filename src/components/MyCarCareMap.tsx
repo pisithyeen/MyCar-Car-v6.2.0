@@ -75,7 +75,6 @@ interface MyCarCareMapProps {
   onRefreshData?: () => void;
   onLogRecordExternal?: (logData: any) => Promise<boolean>;
   onNavigateTab?: (tab: string) => void;
-  selectedVehicle?: VehicleProfile | null;
 }
 
 export default function MyCarCareMap({
@@ -84,8 +83,7 @@ export default function MyCarCareMap({
   activeUser,
   onRefreshData,
   onLogRecordExternal,
-  onNavigateTab,
-  selectedVehicle = null
+  onNavigateTab
 }: MyCarCareMapProps) {
   // --- LOCAL PERSISTED DATABASES ---
   const [pins, setPins] = useState<MapLocationPin[]>([]);
@@ -161,28 +159,6 @@ export default function MyCarCareMap({
   
   // Reporting form state
   const [reportReason, setReportReason] = useState("");
-
-  // Powertrain category selector effect
-  useEffect(() => {
-    if (selectedVehicle) {
-      const fuel = (selectedVehicle.fuelType || "").toUpperCase();
-      const model = (selectedVehicle.model || "").toUpperCase();
-      
-      const isElectric = fuel === "EV" || fuel === "ELECTRIC" || model.includes("BYD") || model.includes("TESLA");
-      const isPlugInHybrid = fuel.includes("PHEV") || fuel.includes("PLUG-IN");
-      const isHybrid = fuel.includes("HYBRID") && !isPlugInHybrid;
-
-      if (isElectric) {
-        setCategoryFilter("EV Charging");
-      } else if (isPlugInHybrid) {
-        setCategoryFilter("All");
-      } else if (isHybrid) {
-        setCategoryFilter("Petrol Station");
-      } else {
-        setCategoryFilter("Petrol Station");
-      }
-    }
-  }, [selectedVehicle]);
 
   // Core Seed Initializer
   useEffect(() => {

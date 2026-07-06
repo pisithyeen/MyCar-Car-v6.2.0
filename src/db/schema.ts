@@ -349,18 +349,16 @@ export const petrolStations = pgTable('petrol_stations', {
 
 // 23. EV Charging Stations Table
 export const evChargingStations = pgTable('ev_charging_stations', {
-  evStationId: text('ev_station_id').primaryKey(),
-  businessId: text('business_id'),
-  ownerUserId: text('owner_user_id').references(() => users.uid, { onDelete: 'cascade' }),
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
   stationName: text('station_name').notNull(),
   phone: text('phone').notNull(),
   address: text('address').notNull(),
-  latitude: real('latitude'),
-  longitude: real('longitude'),
-  operatingHours: text('operating_hours'),
+  chargerTypes: text('charger_types'), // CSV like CCS2, GB/T, Type 2
+  powerKw: integer('power_kw'),
+  hasAvailableCords: boolean('has_available_cords').default(true),
   status: text('status').default('Pending'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
+  createdAt: timestamp('created_at').defaultNow()
 });
 
 // 24. Freelancer Mechanics Table
@@ -517,60 +515,5 @@ export const fleetSubscriptionPlans = pgTable('fleet_subscription_plans', {
   vehicleLimit: integer('vehicle_limit').notNull(),
   driverLimit: integer('driver_limit').notNull(),
   features: text('features'), // CSV or text
-  createdAt: timestamp('created_at').defaultNow()
-});
-
-// 37. EV Chargers Table
-export const evChargers = pgTable('ev_chargers', {
-  chargerId: text('charger_id').primaryKey(),
-  evStationId: text('ev_station_id').references(() => evChargingStations.evStationId, { onDelete: 'cascade' }),
-  chargerName: text('charger_name').notNull(),
-  chargerType: text('charger_type'), // e.g. 'AC' | 'DC'
-  plugType: text('plug_type'), // e.g. 'Type 2' | 'CCS2' | 'GB/T'
-  chargingSpeedKw: real('charging_speed_kw'),
-  pricePerKwh: real('price_per_kwh'),
-  availabilityStatus: text('availability_status').default('Available'), // e.g. 'Available' | 'Occupied' | 'Offline'
-  maintenanceStatus: text('maintenance_status').default('Operational'), // e.g. 'Operational' | 'Under Maintenance'
-  status: text('status').default('Active'),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow()
-});
-
-// 38. Charging Sessions Table
-export const chargingSessions = pgTable('charging_sessions', {
-  sessionId: text('session_id').primaryKey(),
-  evStationId: text('ev_station_id').references(() => evChargingStations.evStationId, { onDelete: 'cascade' }),
-  chargerId: text('charger_id').references(() => evChargers.chargerId, { onDelete: 'cascade' }),
-  userId: text('user_id'),
-  vehicleId: text('vehicle_id'),
-  startTime: text('start_time'),
-  endTime: text('end_time'),
-  energyUsedKwh: real('energy_used_kwh'),
-  totalCost: real('total_cost'),
-  paymentStatus: text('payment_status').default('Paid'), // 'Paid' | 'Pending'
-  sessionStatus: text('session_status').default('Completed'), // 'Completed' | 'In Progress'
-  createdAt: timestamp('created_at').defaultNow()
-});
-
-// 39. EV Station Staff Table
-export const evStationStaff = pgTable('ev_station_staff', {
-  staffId: text('staff_id').primaryKey(),
-  userId: text('user_id'),
-  businessId: text('business_id'),
-  evStationId: text('ev_station_id').references(() => evChargingStations.evStationId, { onDelete: 'cascade' }),
-  roleType: text('role_type'), // e.g. 'Station Manager' | 'Technician' | 'Operator'
-  permissionGroup: text('permission_group'), // e.g. 'Admin' | 'Staff'
-  status: text('status').default('Active'),
-  createdAt: timestamp('created_at').defaultNow()
-});
-
-// 40. EV Station Reviews Table
-export const evStationReviews = pgTable('ev_station_reviews', {
-  reviewId: text('review_id').primaryKey(),
-  evStationId: text('ev_station_id').references(() => evChargingStations.evStationId, { onDelete: 'cascade' }),
-  userId: text('user_id'),
-  vehicleId: text('vehicle_id'),
-  rating: integer('rating').notNull(),
-  comment: text('comment'),
   createdAt: timestamp('created_at').defaultNow()
 });

@@ -15,7 +15,6 @@ import {
   Info, 
   X, 
   FileCheck,
-  History,
   ChevronRight,
   Shield,
   Activity,
@@ -34,7 +33,7 @@ import {
   AlertTriangle,
   Coins,
   Layers,
-  UserCheck,
+  Globe,
   Menu
 } from "lucide-react";
 import { UserProfile, VehicleProfile, MaintenanceRecord, GaragePartner } from "./types";
@@ -52,12 +51,10 @@ import AIDreamCarAdvisor from "./components/AIDreamCarAdvisor";
 import { QuickServiceLogSystem } from "./components/QuickServiceLogSystem";
 import { VehicleRegistrationSystem } from "./components/VehicleRegistrationSystem";
 import RoleBasedFormSystem from "./components/RoleBasedFormSystem";
-import { isPureEV, hasEvBatteryAndCharging, hasDieselSystem, hasPetrolSystem } from "./utils/compatibility";
 
 import LoginScreen from "./components/LoginScreen";
 import GarageDashboard from "./components/GarageDashboard";
 import StationDashboard from "./components/StationDashboard";
-import EvStationDashboard from "./components/EvStationDashboard";
 import PartsDashboard from "./components/PartsDashboard";
 import FreelanceDashboard from "./components/FreelanceDashboard";
 import PendingApprovalScreen from "./components/PendingApprovalScreen";
@@ -66,9 +63,6 @@ import FixMyCarBiddingModule from "./components/FixMyCarBiddingModule";
 import FleetManager from "./components/FleetManager";
 import UserOnboardingTour from "./components/UserOnboardingTour";
 import { syncVehicleRecords } from "./utils/dataSync";
-import { RoleSwitcher } from "./components/RoleSwitcher";
-import { SyncHistory } from "./components/SyncHistory";
-import { motion, AnimatePresence } from "motion/react";
 
 /**
  * Custom Hook that triggers whenever a driver submits a fuel or maintenance record,
@@ -129,11 +123,97 @@ export function useFleetDataSync(
   }, [records, setVehicles]);
 }
 
+export const translations = {
+  EN: {
+    dashboard: "My Vehicle & Logger",
+    fleet_manager: "★ Fleet & Family Manager",
+    alarms: "Alarms & Reminders",
+    tools: "Tools",
+    classifieds: "Marketplace",
+    forum: "Help Forum",
+    garages: "Phnom Penh Service Finder",
+    partner_portal: "QR & Partner Portal",
+    admin: "Operations Admin Panel",
+    active_vehicle: "Active Vehicle",
+    no_vehicles: "No active vehicles registered.",
+    select_vehicle: "Select a Vehicle",
+    emergency_sos: "🚨 Emergency SOS",
+    setup_guide: "🧭 Setup Guide & Coins",
+    change_role: "Change Role",
+    online: "Online",
+    offline: "Offline",
+    khmer_slang: "Khmer Slang Dictionary",
+    app_subtitle: "AI vehicle maintenance supervisor",
+    app_title: "MyCar Care KH",
+    my_functions: "My Functions",
+    pending_status: "Registration Bureau",
+    suspended_status: "Bureau Sanctions",
+    role_forms: "Unified Form System",
+    fix_my_car_bidding: "Fix My Car Requests",
+    coins: "Care Coin Donation & Rewards",
+    vehicle_powertrains: "My Vehicle Specifications",
+    quick_service_workspace: "Quick Service Workspace",
+    "dream-car-advisor": "Can I Afford This Car?",
+    "ai-chat": "AI System Checker",
+    "reports": "AI Weak Report",
+    fuel_prices: "Phnom Penh Fuel Prices",
+    regular: "Regular",
+    premium: "Premium",
+    live_today: "Live Today",
+    road_hazard: "Report a Road Hazard",
+    qr_guide_title: "QR Scanner Guide",
+    qr_guide_desc: "Authorized partners scan your vehicle's secure QR code to instantly pull and log live service records.",
+    qr_active: "Scan Reader Active"
+  },
+  KH: {
+    dashboard: "យានយន្ត និងការកត់ត្រា",
+    fleet_manager: "★ គ្រប់គ្រងក្រុមឡាន & គ្រួសារ",
+    alarms: "ការរំលឹក និងម៉ោងរោទ៍",
+    tools: "ឧបករណ៍ជំនួយ",
+    classifieds: "ផ្សារលក់គ្រឿងបន្លាស់",
+    forum: "វេទិកាពិភាក្សាជំនួយ",
+    garages: "ស្វែងរកយានដ្ឋានភ្នំពេញ",
+    partner_portal: "ស្កេន QR & ដៃគូ",
+    admin: "ផ្ទាំងគ្រប់គ្រងប្រព័ន្ធ",
+    active_vehicle: "ឡានសកម្មបច្ចុប្បន្ន",
+    no_vehicles: "មិនទាន់មានឡានចុះបញ្ជីនៅឡើយទេ",
+    select_vehicle: "ជ្រើសរើសឡាន",
+    emergency_sos: "🚨 ជំនួយសង្គ្រោះបន្ទាន់ SOS",
+    setup_guide: "🧭 ណែនាំ & ទទួលបានកាក់",
+    change_role: "ប្តូរតួនាទី (Demo)",
+    online: "ភ្ជាប់អ៊ីនធឺណិត",
+    offline: "គ្មានអ៊ីនធឺណិត",
+    khmer_slang: "វចនានុក្រមពាក្យបច្ចេកទេសឡាន",
+    app_subtitle: "ប្រព័ន្ធត្រួតពិនិត្យថែទាំឡានឆ្លាតវៃ (AI)",
+    app_title: "យានយន្ត Care KH",
+    my_functions: "មុខងាររបស់ខ្ញុំ",
+    pending_status: "ការិយាល័យចុះឈ្មោះយានយន្ត",
+    suspended_status: "យានយន្តត្រូវបានផ្អាក",
+    role_forms: "ប្រព័ន្ធសំណុំបែបបទរួម",
+    fix_my_car_bidding: "ស្នើសុំការដេញថ្លៃជួសជុល",
+    coins: "ការបរិច្ចាគកាក់ និងរង្វាន់",
+    vehicle_powertrains: "លក្ខណៈបច្ចេកទេសឡាន",
+    quick_service_workspace: "កន្លែងកត់ត្រារហ័ស",
+    "dream-car-advisor": "តើខ្ញុំអាចទិញឡាននេះបានទេ?",
+    "ai-chat": "ប្រព័ន្ធពិនិត្យ AI (សាកល្បង)",
+    "reports": "របាយការណ៍ចំណុចខ្សោយ AI",
+    fuel_prices: "តម្លៃប្រេងសាំងនៅភ្នំពេញ",
+    regular: "ធម្មតា",
+    premium: "ស៊ុបពែរ",
+    live_today: "ផ្ទាល់ថ្ងៃនេះ",
+    road_hazard: "រាយការណ៍គ្រោះថ្នាក់ផ្លូវថ្នល់",
+    qr_guide_title: "ការណែនាំអំពីស្កេន QR",
+    qr_guide_desc: "ដៃគូដែលមានការអនុញ្ញាតអាចស្កេនកូដ QR សុវត្ថិភាពរបស់យានយន្តរបស់អ្នក ដើម្បីទទួល និងកត់ត្រាកំណត់ត្រាសេវាកម្មភ្លាមៗ។",
+    qr_active: "ឧបករណ៍ស្កេនកំពុងដំណើរការ"
+  }
+};
+
 export default function App() {
   // Navigation tabs state
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [lang, setLang] = useState<'EN' | 'KH'>('EN');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   
   // Sidebar Tools group expansion state
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({ tools: true });
@@ -154,26 +234,21 @@ export default function App() {
       return;
     }
     
-    const activeRole = userProfile.active_role || userProfile.role;
-    switch (activeRole) {
+    switch (userProfile.role) {
       case "Vehicle Owner":
         setActiveTab("dashboard");
         break;
       case "Vehicle Manager":
         setActiveTab("fleet_manager");
         break;
-      case "Driver":
-        setActiveTab("fleet_manager"); // Driver Console
+      case "Driver / Staff":
+        setActiveTab("fleet_manager");
         break;
       case "Garage Owner":
-      case "Garage Staff":
-        setActiveTab("parts_control"); // Business Dashboard / Workstation
+        setActiveTab("garage_control");
         break;
       case "Petrol Station Partner":
         setActiveTab("station_control");
-        break;
-      case "EV Charging Station Partner":
-        setActiveTab("ev_station_control");
         break;
       case "Spare Part Shop":
         setActiveTab("parts_control");
@@ -187,7 +262,7 @@ export default function App() {
       default:
         setActiveTab("dashboard");
     }
-  }, [userProfile?.active_role, userProfile?.role, userProfile?.status]);
+  }, [userProfile?.role, userProfile?.status]);
   const [vehicles, setVehicles] = useState<VehicleProfile[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleProfile | null>(null);
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
@@ -195,114 +270,6 @@ export default function App() {
 
   // Call useFleetDataSync to keep vehicles and selectedVehicle synced with incoming driver records in real-time
   useFleetDataSync(records, vehicles, setVehicles, selectedVehicle, setSelectedVehicle);
-  
-  // Derived state based on user role and selected vehicle/business/user
-  const filteredVehicles = React.useMemo(() => {
-    if (!userProfile) return [];
-    const role = userProfile.active_role || userProfile.role;
-    const name = userProfile.name;
-    const activeVehId = userProfile.active_vehicle_id;
-    const activeBusId = userProfile.active_business_id;
-
-    let list = vehicles;
-
-    // First scope by active_role permissions and relations
-    if (role === "Admin") {
-      // Admin has full view of all vehicles on the system
-    } else if (role === "Vehicle Owner") {
-      list = list.filter(v => v.owner === name || v.owner?.toLowerCase() === name.toLowerCase() || v.id === activeVehId);
-    } else if (role === "Vehicle Manager") {
-      // Managers can see their own vehicles, seeded fleet cars, or explicitly scoped active vehicle
-      list = list.filter(v => v.owner === name || v.id === "v1" || v.id === "v3" || v.id === activeVehId);
-    } else if (role === "Driver" || role === "Driver / Staff") {
-      // Drivers see their assigned driver cars or active vehicle context
-      list = list.filter(v => v.id === "v2" || v.owner === name || v.id === activeVehId);
-    } else if (role === "Garage Owner" || role === "Garage Staff") {
-      // Garages see vehicles with service history at their business or fallback client vehicles
-      list = list.filter(v => 
-        v.id === "v1" || v.id === "v2" || v.id === "v3" ||
-        records.some(r => r.vehicleId === v.id && (r.providerId === activeBusId || r.provider?.toLowerCase().includes("angkor")))
-      );
-    } else if (role === "Freelance Mechanic") {
-      list = list.filter(v => v.id === "v1" || v.id === "v2");
-    } else if (role === "Spare Part Shop") {
-      const isGarageEnabled = userProfile.isMultiService && userProfile.activatedModules?.includes("Garage / Repair Shop Module");
-      if (isGarageEnabled) {
-        list = list.filter(v => v.id === "v1" || v.id === "v2" || v.id === activeVehId);
-      } else {
-        list = list.filter(v => v.id === activeVehId);
-      }
-    } else {
-      list = [];
-    }
-
-    // Second: Scoping by active_business_id relation
-    if (activeBusId && (role === "Garage Owner" || role === "Garage Staff" || role === "Spare Part Shop")) {
-      // Scoping logic applied: filter or prioritize records and vehicles in business view
-    }
-
-    // Third: Scoping by active_vehicle_id context parameter if specified and valid
-    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver" || role === "Driver / Staff")) {
-      const hasVehicle = list.some(v => v.id === activeVehId);
-      if (hasVehicle) {
-        list = list.filter(v => v.id === activeVehId);
-      }
-    }
-
-    return list;
-  }, [vehicles, records, userProfile]);
-
-  const filteredRecords = React.useMemo(() => {
-    if (!userProfile) return [];
-    const role = userProfile.active_role || userProfile.role;
-    const garageName = userProfile.businessName || "Angkor Speed Auto Repair";
-    const activeBusId = userProfile.active_business_id;
-    const activeVehId = userProfile.active_vehicle_id;
-    const filteredVehIds = filteredVehicles.map(v => v.id);
-
-    let list = records;
-
-    // Scope records by active_role permissions
-    if (role === "Admin") {
-      // Admin has full system visibility
-    } else if (role === "Garage Owner" || role === "Garage Staff") {
-      // Service providers see records done at their shop (matching activeBusId) or for their active filtered vehicles
-      list = list.filter(r => 
-        r.provider?.toLowerCase().includes(garageName.toLowerCase()) || 
-        r.provider?.toLowerCase().includes("angkor") ||
-        (activeBusId && r.providerId === activeBusId) ||
-        filteredVehIds.includes(r.vehicleId)
-      );
-    } else {
-      list = list.filter(r => filteredVehIds.includes(r.vehicleId));
-    }
-
-    // Scope by active_vehicle_id context parameter if specified
-    if (activeVehId && (role === "Vehicle Owner" || role === "Vehicle Manager" || role === "Driver" || role === "Driver / Staff")) {
-      list = list.filter(r => r.vehicleId === activeVehId);
-    }
-
-    // Scope by active_business_id if specified and role is a service provider
-    if (activeBusId && (role === "Garage Owner" || role === "Garage Staff")) {
-      const businessScoped = list.filter(r => r.providerId === activeBusId || r.provider?.toLowerCase().includes("angkor"));
-      if (businessScoped.length > 0) {
-        list = businessScoped;
-      }
-    }
-
-    return list;
-  }, [records, filteredVehicles, userProfile]);
-
-  // Keep selectedVehicle synchronized with filteredVehicles list
-  useEffect(() => {
-    if (filteredVehicles.length > 0) {
-      if (!selectedVehicle || !filteredVehicles.some(v => v.id === selectedVehicle.id)) {
-        setSelectedVehicle(filteredVehicles[0]);
-      }
-    } else {
-      setSelectedVehicle(null);
-    }
-  }, [filteredVehicles, selectedVehicle]);
   
   // Modals state
   const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
@@ -335,15 +302,7 @@ export default function App() {
     }
   });
   const [showOfflineQueuePopover, setShowOfflineQueuePopover] = useState<boolean>(false);
-  const [showSyncHistoryModal, setShowSyncHistoryModal] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [syncToast, setSyncToast] = useState<{
-    show: boolean;
-    count: number;
-    duplicatesSkipped: number;
-    autoCorrected: number;
-    merged: number;
-  } | null>(null);
 
   // Persist offline queue
   useEffect(() => {
@@ -952,108 +911,23 @@ export default function App() {
     return false;
   };
 
-  // Synchronize cached offline queue items back to server DB with dynamic conflict resolution
+  // Synchronize cached offline queue items back to server DB
   const handleSyncOfflineQueue = async () => {
     if (offlineQueue.length === 0 || isDisconnected || isSyncing) return;
     setIsSyncing(true);
     
-    // Fetch fresh authoritative server records first for comparison
-    let serverRecords: any[] = [];
-    try {
-      const recordsRes = await fetch("/api/maintenance");
-      if (recordsRes.ok) {
-        serverRecords = await recordsRes.json();
-      }
-    } catch (err) {
-      console.error("Failed to retrieve authoritative server records for conflict auditing:", err);
-    }
-
     const remainingQueue = [...offlineQueue];
     const successfullySynced: string[] = [];
-    let duplicatesSkipped = 0;
-    let autoCorrected = 0;
-    let merged = 0;
 
     for (const item of remainingQueue) {
-      // 1. Detect Exact Duplicate Conflict (Same vehicle, date, category, mileage, and cost)
-      const isExactDuplicate = serverRecords.some(r => 
-        r.vehicleId === item.vehicleId &&
-        r.date === item.date &&
-        r.serviceCategory === item.serviceCategory &&
-        r.mileage === item.mileage &&
-        Math.abs((r.cost || 0) - (item.cost || 0)) < 0.01
-      );
-
-      if (isExactDuplicate) {
-        // Auto-resolve: mark as synced so we flush it from local cache, but skip redundant upload
-        successfullySynced.push(item.id);
-        duplicatesSkipped++;
-        continue;
-      }
-
-      // Clone log item to allow modifications during resolution
-      let resolvedItem = { ...item };
-      let resolutionTriggered = false;
-
-      // 2. Detect Same-day, Same-category conflict -> Merge descriptions & keep maximum mileage / cost
-      const sameDayCategoryMatch = serverRecords.find(r => 
-        r.vehicleId === item.vehicleId &&
-        r.date === item.date &&
-        r.serviceCategory === item.serviceCategory
-      );
-
-      if (sameDayCategoryMatch) {
-        resolvedItem.description = `${item.description} (Merged with existing service: ${sameDayCategoryMatch.description})`;
-        resolvedItem.mileage = Math.max(item.mileage, sameDayCategoryMatch.mileage);
-        resolvedItem.cost = Math.max(item.cost, sameDayCategoryMatch.cost);
-        merged++;
-        resolutionTriggered = true;
-      }
-
-      // 3. Detect Chronological Odometer Collisions
-      const vehicleServerRecords = serverRecords.filter(r => r.vehicleId === item.vehicleId);
-
-      if (vehicleServerRecords.length > 0) {
-        // Find maximum mileage registered for dates on or before this item's date
-        const priorRecords = vehicleServerRecords.filter(r => r.date <= item.date);
-        if (priorRecords.length > 0) {
-          const maxPriorMileage = Math.max(...priorRecords.map(r => r.mileage || 0));
-          if (resolvedItem.mileage < maxPriorMileage) {
-            // Odometer rollback detected. Correct it to prevent odometer backward collision!
-            resolvedItem.mileage = maxPriorMileage;
-            resolvedItem.description = `${resolvedItem.description} [Odometer auto-adjusted from ${item.mileage} km to ${maxPriorMileage} km to resolve rollback conflict]`;
-            if (!resolutionTriggered) {
-              autoCorrected++;
-              resolutionTriggered = true;
-            }
-          }
-        }
-
-        // Find minimum mileage registered for dates on or after this item's date
-        const futureRecords = vehicleServerRecords.filter(r => r.date >= item.date);
-        if (futureRecords.length > 0) {
-          const minFutureMileage = Math.min(...futureRecords.map(r => r.mileage || 0));
-          if (resolvedItem.mileage > minFutureMileage) {
-            // Future odometer conflict detected. Pull it down to maintain monotonically increasing timeline.
-            resolvedItem.mileage = minFutureMileage;
-            resolvedItem.description = `${resolvedItem.description} [Odometer auto-adjusted from ${item.mileage} km to ${minFutureMileage} km to resolve timeline conflict]`;
-            if (!resolutionTriggered) {
-              autoCorrected++;
-              resolutionTriggered = true;
-            }
-          }
-        }
-      }
-
-      // Execute Sync to Cloud Server
       const payload = {
-        vehicleId: resolvedItem.vehicleId,
-        serviceCategory: resolvedItem.serviceCategory,
-        description: resolvedItem.description,
-        cost: resolvedItem.cost,
-        mileage: resolvedItem.mileage,
-        date: resolvedItem.date,
-        provider: resolvedItem.provider
+        vehicleId: item.vehicleId,
+        serviceCategory: item.serviceCategory,
+        description: item.description,
+        cost: item.cost,
+        mileage: item.mileage,
+        date: item.date,
+        provider: item.provider
       };
 
       try {
@@ -1065,13 +939,10 @@ export default function App() {
 
         if (res.ok) {
           successfullySynced.push(item.id);
-          // Append newly synced item to our serverRecords array to account for successive item comparisons!
-          const createdRecord = await res.json();
-          serverRecords.push(createdRecord);
         }
       } catch (err) {
         console.error("Failed to sync offline item:", item, err);
-        break; // Stop loop if server connection drops during processing
+        break; // break early if reconnect status drops
       }
     }
 
@@ -1090,46 +961,7 @@ export default function App() {
         // Fallback: exclude synced items if fetch failed
         setRecords(prev => prev.filter(r => !successfullySynced.includes(r.id)));
       }
-      
-      // Save sync event to Audit History
-      try {
-        const hasAnomalies = duplicatesSkipped > 0 || autoCorrected > 0 || merged > 0;
-        const detailsList: string[] = [];
-        detailsList.push(`Successfully synchronized ${successfullySynced.length} locally-cached maintenance log(s) to Cambodia MyCar Cloud Server.`);
-        if (duplicatesSkipped > 0) detailsList.push(`${duplicatesSkipped} redundant duplicate log(s) were safely filtered to prevent double entry.`);
-        if (autoCorrected > 0) detailsList.push(`${autoCorrected} chronological odometer rollback collision(s) were automatically corrected.`);
-        if (merged > 0) detailsList.push(`${merged} same-day category entries were merged.`);
-
-        const newLog = {
-          id: "sync-" + Date.now(),
-          timestamp: new Date().toLocaleString("en-US", { hour12: true }),
-          totalSynced: successfullySynced.length,
-          duplicatesSkipped,
-          autoCorrected,
-          merged,
-          status: hasAnomalies ? "warning" : "success",
-          details: detailsList.join(" ")
-        };
-
-        const existingHistorySaved = localStorage.getItem("mcc_sync_history");
-        let existingHistory = [];
-        if (existingHistorySaved) {
-          existingHistory = JSON.parse(existingHistorySaved);
-        }
-        const updatedHistory = [newLog, ...existingHistory];
-        localStorage.setItem("mcc_sync_history", JSON.stringify(updatedHistory));
-      } catch (err) {
-        console.error("Failed to write to sync history storage:", err);
-      }
-
-      // Trigger elegant persistent custom sync toast dialog with detailed stats
-      setSyncToast({
-        show: true,
-        count: successfullySynced.length,
-        duplicatesSkipped,
-        autoCorrected,
-        merged
-      });
+      alert(`Sync Complete: Successfully synced ${successfullySynced.length} locally-cached service logs to the Cambodia MyCar Cloud Server!`);
     }
 
     setIsSyncing(false);
@@ -1141,16 +973,6 @@ export default function App() {
       handleSyncOfflineQueue();
     }
   }, [isDisconnected]);
-
-  // Auto-dismiss the offline data sync success toast after 6 seconds
-  useEffect(() => {
-    if (syncToast && syncToast.show) {
-      const timer = setTimeout(() => {
-        setSyncToast(null);
-      }, 6000);
-      return () => clearTimeout(timer);
-    }
-  }, [syncToast]);
 
   // Switch to maps locator and highlight category search recommended from chat advisor
   const handleDiagnosisFocusTransition = (categoryName: string) => {
@@ -1184,132 +1006,135 @@ export default function App() {
     }
 
     const baseItems = (() => {
-      const activeRole = userProfile?.active_role || userProfile?.role || "Vehicle Owner";
-      switch (activeRole) {
+      switch (userProfile?.role) {
         case "Vehicle Owner":
           return [
-            { id: "dashboard", label: "My Vehicles & Logs", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "fleet_manager", label: "★ Fleet & Family Manager", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
             { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
-            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
-            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
-            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
-            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "fix_my_car_bidding", label: "Fix My Car Requests", icon: <Wrench className="w-4 h-4 text-emerald-400" /> },
-            { id: "coins", label: "Care Coin Donation & Rewards", icon: <Coins className="w-4 h-4 text-amber-400" /> },
             { 
               id: "tools", 
-              label: "AI Tools", 
+              label: "Tools", 
               icon: <Wrench className="w-4 h-4 text-indigo-400" />,
               isGroup: true,
               subItems: [
                 { id: "dream-car-advisor", label: "Can I Afford This Car?", icon: <Sparkles className="w-4 h-4 text-pink-400 animate-pulse" /> },
-                { id: "ai-chat", label: "AI Checker", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
+                { id: "ai-chat", label: "AI System Checker", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
                 { id: "reports", label: "AI Weak Report", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> },
               ]
-            }
+            },
+            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
+            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
+            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
           ];
         case "Vehicle Manager":
           return [
             { id: "fleet_manager", label: "★ Fleet Dashboard", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "Managed Vehicles", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "alarms", label: "Service Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
-            { id: "role_forms", label: "Driver Assignment", icon: <UserCheck className="w-4 h-4 text-indigo-400" /> },
-            { id: "coins", label: "Fleet Expenses", icon: <Coins className="w-4 h-4 text-amber-400" /> },
-            { id: "quick_service_workspace", label: "Vehicle Availability", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
-            { id: "reports", label: "Issue Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "alarms", label: "Alarms & Reminders", icon: <Bell className="w-4 h-4 text-sky-400" /> },
+            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-400" /> },
+            { id: "forum", label: "Help Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> },
+            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "partner_portal", label: "QR & Partner Portal", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
           ];
-        case "Driver":
+        case "Driver / Staff":
           return [
             { id: "fleet_manager", label: "★ Driver Console", icon: <Layers className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "dashboard", label: "Assigned Vehicle", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "coins", label: "Fuel & Charge Logs", icon: <Coins className="w-4 h-4 text-amber-400" /> },
-            { id: "quick_service_workspace", label: "Odometer Update", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
-            { id: "role_forms", label: "Trip Notes & Report", icon: <Wrench className="w-4 h-4 text-red-400" /> }
+            { id: "dashboard", label: "My Vehicle & Logger", icon: <Car className="w-4 h-4 text-sky-400" /> },
+            { id: "garages", label: "Phnom Penh Service Finder", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
           ];
         case "Garage Owner":
           return [
-            { id: "parts_control", label: "Garage Dashboard", icon: <Wrench className="w-4 h-4 text-emerald-400 animate-pulse" /> },
-            { id: "quick_service_workspace", label: "Service Jobs", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
-            { id: "partner_portal", label: "Scan Vehicle QR", icon: <QrCode className="w-4 h-4 text-indigo-400" /> },
-            { id: "dashboard", label: "Customer Vehicles", icon: <Car className="w-4 h-4 text-sky-400" /> },
-            { id: "fix_my_car_bidding", label: "Pending Approvals", icon: <Wrench className="w-4 h-4 text-rose-450 animate-pulse" /> },
-            { id: "role_forms", label: "Staff & Mini POS", icon: <Sliders className="w-4 h-4 text-purple-400" /> },
-            { id: "reports", label: "Business Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
-          ];
-        case "Garage Staff":
-          return [
-            { id: "parts_control", label: "Staff Dashboard", icon: <Wrench className="w-4 h-4 text-emerald-400" /> },
-            { id: "quick_service_workspace", label: "Receptionist & Jobs", icon: <Sliders className="w-4 h-4 text-teal-400" /> },
-            { id: "partner_portal", label: "Scan Vehicle QR", icon: <QrCode className="w-4 h-4 text-indigo-400" /> }
-          ];
-        case "Spare Part Shop":
-          return [
-            { id: "parts_control", label: "Spare Parts Dashboard", icon: <Tag className="w-4 h-4 text-amber-400 animate-pulse" /> },
-            { id: "classifieds", label: "Marketplace Posts", icon: <Tag className="w-4 h-4 text-yellow-450" /> },
-            { id: "quick_service_workspace", label: "Inventory & Orders", icon: <Sliders className="w-4 h-4 text-indigo-400" /> },
-            { id: "reports", label: "Low Stock Reports", icon: <FileCheck className="w-4 h-4 text-indigo-400" /> }
+            { id: "parts_control", label: "Business Workstation", icon: <Wrench className="w-4 h-4 text-emerald-400 animate-pulse" /> },
+            { id: "ai-chat", label: "Diagnostics Expert AI", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
+            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-500" /> },
+            { id: "garages", label: "My Public Locator", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "forum", label: "Customer Helpline Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
           ];
         case "Petrol Station Partner":
           return [
-            { id: "station_control", label: "Petrol Station Dashboard", icon: <Fuel className="w-4 h-4 text-amber-400" /> },
-            { id: "garages", label: "Location Map", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "classifieds", label: "Promotions & Reviews", icon: <Tag className="w-4 h-4 text-sky-400" /> }
+            { id: "station_control", label: "Fuel Dispensation Desk", icon: <Fuel className="w-4 h-4 text-amber-400" /> },
+            { id: "garages", label: "Locate Partner Outlets", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
+            { id: "forum", label: "Fuel Quality Q&A Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
           ];
-        case "EV Charging Station Partner":
+        case "Spare Part Shop":
           return [
-            { id: "ev_station_control", label: "EV Charging Dashboard", icon: <Zap className="w-4 h-4 text-emerald-400" /> },
-            { id: "garages", label: "Location Map", icon: <MapPin className="w-4 h-4 text-orange-400" /> },
-            { id: "classifieds", label: "Charging Pricing Info", icon: <Tag className="w-4 h-4 text-sky-400" /> }
-          ];
-        case "Freelance Mechanic":
-          return [
-            { id: "freelance_control", label: "Mechanic Dashboard", icon: <Zap className="w-4 h-4 text-rose-450 animate-pulse" /> },
-            { id: "fix_my_car_bidding", label: "Distress Alerts & Bids", icon: <Wrench className="w-4 h-4 text-emerald-450" /> },
-            { id: "forum", label: "Assistance Tips Board", icon: <MessageSquare className="w-4 h-4 text-emerald-400" /> }
+            { id: "parts_control", label: "Business Workstation", icon: <Sliders className="w-4 h-4 text-indigo-400" /> },
+            { id: "classifieds", label: "Marketplace", icon: <Tag className="w-4 h-4 text-amber-500" /> },
+            { id: "ai-chat", label: "Fitment Solver AI", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
+            { id: "forum", label: "Part Requests Forum", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
           ];
         case "Admin":
           return [
-            { id: "admin", label: "Admin Panel", icon: <Terminal className="w-4 h-4 text-sky-400 animate-pulse" /> },
-            { id: "dashboard", label: "Vehicles Database", icon: <Car className="w-4 h-4 text-slate-400" /> },
-            { id: "forum", label: "Forum Moderation", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> }
+            { id: "admin", label: "Operations Admin Panel", icon: <Terminal className="w-4 h-4 text-sky-400" /> },
+            { id: "dashboard", label: "All Vehicles Database", icon: <Car className="w-4 h-4 text-slate-400" /> },
+            { id: "forum", label: "Forum Discussions Mod", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
+          ];
+        case "Freelance Mechanic":
+          return [
+            { id: "freelance_control", label: "Highway Distress Alerts", icon: <Zap className="w-4 h-4 text-rose-400 animate-pulse" /> },
+            { id: "ai-chat", label: "Diagnostics Codes Database", icon: <Sparkles className="w-4 h-4 text-sky-400" /> },
+            { id: "forum", label: "Assistance Tips Board", icon: <MessageSquare className="w-4 h-4 text-emerald-350" /> },
           ];
         default:
           return [
-            { id: "dashboard", label: "My Vehicles & Logs", icon: <Car className="w-4 h-4 text-sky-400" /> }
+            { id: "dashboard", label: "Home Odometer", icon: <Car className="w-4 h-4 text-sky-400" /> }
           ];
       }
     })();
 
     return [
-      { id: "role_switcher", label: "Unified Persona Control", icon: <UserCheck className="w-4 h-4 text-sky-400 animate-pulse" /> },
-      ...baseItems
+      { id: "role_forms", label: "Unified Form System", icon: <Sliders className="w-4 h-4 text-sky-400 animate-pulse" /> },
+      ...baseItems,
+      { id: "fix_my_car_bidding", label: "Fix My Car Requests", icon: <Wrench className="w-4 h-4 text-emerald-450 text-emerald-400 animate-pulse" /> },
+      { id: "coins", label: "Care Coin Donation & Rewards", icon: <Coins className="w-4 h-4 text-amber-400 animate-pulse" /> },
+      { id: "vehicle_powertrains", label: "My Vehicle", icon: <Sliders className="w-4 h-4 text-pink-450 text-pink-400 animate-pulse" /> },
+      { id: "quick_service_workspace", label: "Quick Service Workspace", icon: <Sliders className="w-4 h-4 text-emerald-450 text-emerald-400 animate-pulse" /> }
     ];
   };
 
   return (
     <div className="min-h-screen text-slate-100 font-sans flex flex-col antialiased">
       {/* -------------------- MAIN NAVIGATION BAR -------------------- */}
-      <header className="sticky top-0 z-40 bg-white/3 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between shadow-lg">
+      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-slate-950 font-bold shadow-lg">
-            <Car className="w-5.5 h-5.5 text-slate-900" />
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="lg:hidden p-2 text-slate-300 hover:text-white hover:bg-white/5 rounded-xl transition border border-white/10 cursor-pointer"
+            title="Toggle Menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-slate-950 font-bold shadow-lg">
+            <Car className="w-5 sm:w-5.5 h-5 sm:h-5.5 text-slate-900" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold text-slate-100 tracking-tight">
-                MyVehicle Care
+              <span className="text-sm sm:text-base font-bold text-slate-100 tracking-tight">
+                {translations[lang].app_title}
               </span>
-              <span className="text-[10px] bg-white/10 text-sky-300 font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border border-white/10">
+              <span className="text-[9px] sm:text-[10px] bg-white/10 text-sky-300 font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border border-white/10">
                 Cambodia MVP
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">AI vehicle maintenance supervisor</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-400">{translations[lang].app_subtitle}</p>
           </div>
         </div>
 
-        {/* User Identity Indicator - Desktop Mode */}
+        {/* User Identity & Global Control Actions */}
         {userProfile && (
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Global Language Switcher */}
+            <button
+              onClick={() => setLang(l => l === 'EN' ? 'KH' : 'EN')}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[11px] sm:text-xs font-extrabold cursor-pointer text-slate-200 transition"
+              title="Switch language / ប្តូរភាសា"
+            >
+              <Globe className="w-3.5 h-3.5 text-sky-400" />
+              <span>{lang === 'EN' ? 'KH' : 'EN'}</span>
+            </button>
+
             {/* Dynamic Offline / Online Connectivity Indicator */}
             {isDisconnected ? (
               <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-xs select-none">
@@ -1433,50 +1258,43 @@ export default function App() {
               </div>
             )}
 
-            <button
-              onClick={() => setShowSyncHistoryModal(true)}
-              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 hover:text-slate-100 border border-white/10 text-sky-400 font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md select-none shrink-0"
-              title="View past offline-to-online sync runs and conflict audit log history"
-            >
-              <History className="w-3.5 h-3.5 text-sky-450" />
-              <span>Sync History</span>
-            </button>
+            <div className="hidden md:flex items-center gap-2 sm:gap-3">
+              {userProfile?.role === "Vehicle Owner" && (
+                <button
+                  onClick={() => setActiveTab("fix_my_car_bidding")}
+                  className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
+                  title="Emergency SOS dispatch Help Request"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>{translations[lang].emergency_sos}</span>
+                </button>
+              )}
 
-            {userProfile?.role === "Vehicle Owner" && (
               <button
-                onClick={() => setActiveTab("fix_my_car_bidding")}
-                className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
-                title="Emergency SOS dispatch Help Request"
+                onClick={() => setIsOnboardingOpen(true)}
+                className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
+                title="Launch interactive onboarding setup flow and get +10 Care Coins"
               >
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>🚨 Emergency SOS</span>
+                <Compass className="w-3.5 h-3.5" />
+                <span>{translations[lang].setup_guide}</span>
               </button>
-            )}
 
-            <button
-              onClick={() => setIsOnboardingOpen(true)}
-              className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
-              title="Launch interactive onboarding setup flow and get +10 Care Coins"
-            >
-              <Compass className="w-3.5 h-3.5" />
-              <span>🧭 Setup Guide & Coins</span>
-            </button>
-
-            <button
-              onClick={() => setIsLoggedIn(false)}
-              className="px-3.5 py-2 hover:bg-white/5 border border-white/10 hover:border-slate-500/30 text-slate-350 hover:text-white transition rounded-xl text-xs font-bold leading-tight flex items-center gap-1.5 cursor-pointer"
-              title="Click to change active role persona and re-trigger landing setup logs"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Change Role (Demo)</span>
-            </button>
+              <button
+                onClick={() => setIsLoggedIn(false)}
+                className="px-3.5 py-2 hover:bg-white/5 border border-white/10 hover:border-slate-500/30 text-slate-350 hover:text-white transition rounded-xl text-xs font-bold leading-tight flex items-center gap-1.5 cursor-pointer"
+                title="Click to change active role persona and re-trigger landing setup logs"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{translations[lang].change_role}</span>
+              </button>
+            </div>
 
             <div 
               onClick={() => setShowSettingsModal(true)}
-              className="px-4 py-2 glass glass-hover rounded-xl flex items-center gap-2.5 transition text-left cursor-pointer group shadow-sm"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 glass glass-hover rounded-xl flex items-center gap-2 sm:gap-2.5 transition text-left cursor-pointer group shadow-sm"
               title="Click to view detailed account parameters settings and locations flags"
             >
-              <div className="w-6.5 h-6.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <div className="w-6 sm:w-6.5 h-6 sm:h-6.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                 <User className="w-3.5 h-3.5" />
               </div>
               <div>
@@ -1490,149 +1308,128 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* User Identity Indicator - Mobile / Tablet Mode */}
-        {userProfile && (
-          <div className="flex lg:hidden items-center gap-2">
-            {/* Minimal Offline queue status indicator */}
-            {offlineQueue.length > 0 && (
-              <button
-                onClick={() => setShowOfflineQueuePopover(!showOfflineQueuePopover)}
-                className="p-2 bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded-xl relative hover:bg-amber-500/20 transition cursor-pointer"
-              >
-                <Wrench className="w-4 h-4 animate-spin" style={{ animationDuration: '6s' }} />
-                <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-amber-500 text-slate-950 rounded-full text-[9px] font-black flex items-center justify-center">
-                  {offlineQueue.length}
-                </span>
-              </button>
-            )}
-
-            {userProfile?.role === "Vehicle Owner" && (
-              <button
-                onClick={() => {
-                  setActiveTab("fix_my_car_bidding");
-                  setIsMobileMenuOpen(false);
-                }}
-                className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] uppercase rounded-lg transition flex items-center gap-1 cursor-pointer animate-pulse"
-                title="Emergency SOS dispatch Help Request"
-              >
-                <AlertTriangle className="w-3 h-3" />
-                <span>SOS</span>
-              </button>
-            )}
-
-            {/* Hamburger Mobile Menu Toggle Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2.5 bg-white/5 border border-white/10 text-slate-200 hover:text-white rounded-xl transition cursor-pointer"
-              aria-label="Toggle Navigation Menu"
-            >
-              {isMobileMenuOpen ? (
-                <X className="w-4.5 h-4.5 text-sky-400" />
-              ) : (
-                <Menu className="w-4.5 h-4.5 text-slate-200" />
-              )}
-            </button>
-          </div>
-        )}
       </header>
 
-      {/* -------------------- CORE CONTENT GRID -------------------- */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Navigation Sidebar Panel */}
-        <nav className={`${isMobileMenuOpen ? "block" : "hidden"} lg:block lg:col-span-3 glass rounded-3xl p-5 space-y-2 select-none`}>
-          {/* Mobile Profile & Quick Actions Section */}
-          {userProfile && (
-            <div className="block lg:hidden space-y-3 pb-4 border-b border-white/10 mb-4">
-              <div 
-                onClick={() => {
-                  setShowSettingsModal(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="px-4 py-2.5 bg-white/5 border border-white/5 rounded-2xl flex items-center gap-2.5 cursor-pointer hover:bg-white/10 transition"
+      {/* -------------------- MOBILE RESPONSIVE SIDEBAR DRAWER -------------------- */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          
+          {/* Menu Panel */}
+          <div className="relative flex w-full max-w-xs flex-col bg-slate-900 border-r border-white/10 p-5 overflow-y-auto z-50">
+            <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
+              <span className="text-sm font-bold text-slate-200">{translations[lang].my_functions}</span>
+              <button 
+                onClick={() => setMobileMenuOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer border border-white/10"
               >
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400 shrink-0">
-                  <User className="w-4 h-4" />
-                </div>
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-slate-200 block truncate leading-tight">{userProfile.name}</span>
-                  <span className="text-[10px] text-slate-500 block truncate">{userProfile.location} • {userProfile.role}</span>
-                </div>
-              </div>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-2">
+            {/* Localized Actions for Mobile */}
+            <div className="flex flex-col gap-2 mb-4 pb-4 border-b border-white/10">
+              {userProfile?.role === "Vehicle Owner" && (
                 <button
-                  onClick={() => {
-                    setIsOnboardingOpen(true);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                  onClick={() => { setActiveTab("fix_my_car_bidding"); setMobileMenuOpen(false); }}
+                  className="w-full px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
                 >
-                  <Compass className="w-3.5 h-3.5" />
-                  <span>Guide & Coins</span>
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>{translations[lang].emergency_sos}</span>
                 </button>
-
-                <button
-                  onClick={() => {
-                    setIsLoggedIn(false);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="py-2.5 px-3 bg-white/5 border border-white/10 text-slate-300 hover:text-white font-bold text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Change Role</span>
-                </button>
-              </div>
+              )}
 
               <button
-                onClick={() => {
-                  setShowSyncHistoryModal(true);
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 hover:text-white border border-white/10 text-sky-400 font-extrabold text-[10px] uppercase rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                onClick={() => { setIsOnboardingOpen(true); setMobileMenuOpen(false); }}
+                className="w-full px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg animate-pulse"
               >
-                <History className="w-3.5 h-3.5" />
-                <span>Sync Audit History</span>
+                <Compass className="w-3.5 h-3.5" />
+                <span>{translations[lang].setup_guide}</span>
               </button>
 
-              {/* Dynamic Connection Monitor */}
-              <div className="flex items-center justify-between p-2.5 bg-slate-950/40 border border-white/5 rounded-xl text-xs">
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider pl-1">Status:</span>
-                {isDisconnected ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-rose-400 font-bold text-[10px] flex items-center gap-1 select-none">
-                      <span className="h-1.5 w-1.5 rounded-full bg-rose-500 block animate-ping"></span>
-                      Offline
-                    </span>
-                    <span className="text-slate-700">|</span>
-                    <button 
-                      onClick={handleRetryLastAction}
-                      disabled={isRetrying}
-                      className="text-sky-400 font-bold text-[10px] hover:underline cursor-pointer flex items-center gap-0.5"
-                    >
-                      {isRetrying ? '...' : 'Retry'}
-                    </button>
-                  </div>
-                ) : (
-                  <button 
-                    onClick={() => {
-                      setIsSimulatedOffline(true);
-                      setIsDisconnected(true);
-                    }}
-                    className="text-emerald-400 font-semibold text-[10px] flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/10 cursor-pointer"
-                    title="Click to simulate offline mode"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 block"></span>
-                    Online (Connected)
-                  </button>
-                )}
-              </div>
+              <button
+                onClick={() => { setIsLoggedIn(false); setMobileMenuOpen(false); }}
+                className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 transition rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>{translations[lang].change_role}</span>
+              </button>
             </div>
-          )}
 
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-3 mb-2">My functions ({userProfile?.role})</span>
+            <nav className="space-y-1">
+              {getNavItems().map((item: any) => {
+                const label = translations[lang][item.id as keyof typeof translations['EN']] || item.label;
+                if (item.isGroup) {
+                  const isExpanded = expandedGroups[item.id] !== false;
+                  return (
+                    <div key={item.id} className="space-y-1">
+                      <button
+                        onClick={() => setExpandedGroups(prev => ({ ...prev, [item.id]: !isExpanded }))}
+                        className="w-full p-3 rounded-xl text-left font-bold text-xs flex items-center justify-between text-slate-300 border border-transparent hover:bg-white/5 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          {item.icon}
+                          <span>{label}</span>
+                        </div>
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                      </button>
+                      {isExpanded && (
+                        <div className="pl-4 border-l border-white/10 space-y-1 ml-4 mt-1">
+                          {item.subItems?.map((subItem: any) => {
+                            const subLabel = translations[lang][subItem.id as keyof typeof translations['EN']] || subItem.label;
+                            return (
+                              <button
+                                key={subItem.id}
+                                onClick={() => { setActiveTab(subItem.id); setMobileMenuOpen(false); }}
+                                className={`w-full p-2 rounded-lg text-left font-semibold text-xs flex items-center gap-2.5 transition cursor-pointer ${
+                                  activeTab === subItem.id ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5"
+                                }`}
+                              >
+                                {subItem.icon}
+                                <span>{subLabel}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveTab(item.id); setMobileMenuOpen(false); }}
+                    className={`w-full p-3 rounded-xl text-left font-semibold text-xs flex items-center justify-between transition cursor-pointer border ${
+                      activeTab === item.id ? "bg-white/10 text-white border-white/15 shadow-sm" : "text-slate-400 border-transparent hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {item.icon}
+                      <span>{label}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------- CORE CONTENT GRID -------------------- */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
+        {/* Navigation Sidebar Panel (Desktop Only) */}
+        <nav className="hidden lg:block lg:col-span-3 glass rounded-3xl p-5 space-y-2 select-none">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-3 mb-2">
+            {translations[lang].my_functions} ({userProfile?.role})
+          </span>
           
           {getNavItems().map((item: any) => {
+            const label = translations[lang][item.id as keyof typeof translations['EN']] || item.label;
+            
             if (item.isGroup) {
               const isExpanded = expandedGroups[item.id] !== false;
               const isSubItemActive = item.subItems?.some((sub: any) => activeTab === sub.id);
@@ -1652,7 +1449,7 @@ export default function App() {
                   >
                     <div className="flex items-center gap-2.5">
                       {item.icon}
-                      <span>{item.label}</span>
+                      <span>{label}</span>
                     </div>
                     <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
                   </button>
@@ -1661,6 +1458,7 @@ export default function App() {
                     <div className="pl-4 border-l border-white/10 space-y-1 ml-5 mt-1">
                       {item.subItems?.map((subItem: any) => {
                         const isActive = activeTab === subItem.id;
+                        const subLabel = translations[lang][subItem.id as keyof typeof translations['EN']] || subItem.label;
                         return (
                           <button
                             key={subItem.id}
@@ -1669,7 +1467,6 @@ export default function App() {
                               setActiveTab(subItem.id);
                               setSearchCategory("");
                               setForumPreFilledCategory("");
-                              setIsMobileMenuOpen(false);
                             }}
                             className={`w-full p-2.5 rounded-xl text-left font-semibold text-xs flex items-center gap-2.5 transition border cursor-pointer ${
                               isActive
@@ -1678,7 +1475,7 @@ export default function App() {
                             }`}
                           >
                             {subItem.icon}
-                            <span>{subItem.label}</span>
+                            <span>{subLabel}</span>
                           </button>
                         );
                       })}
@@ -1692,12 +1489,7 @@ export default function App() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => { 
-                  setActiveTab(item.id); 
-                  setSearchCategory(""); 
-                  setForumPreFilledCategory(""); 
-                  setIsMobileMenuOpen(false);
-                }}
+                onClick={() => { setActiveTab(item.id); setSearchCategory(""); setForumPreFilledCategory(""); }}
                 className={`w-full p-3.5 rounded-2xl text-left font-semibold text-xs flex items-center justify-between transition border cursor-pointer ${
                   activeTab === item.id
                     ? "bg-white/10 text-white border-white/15 shadow-sm"
@@ -1706,7 +1498,7 @@ export default function App() {
               >
                 <div className="flex items-center gap-2.5">
                   {item.icon}
-                  <span>{item.label}</span>
+                  <span>{label}</span>
                 </div>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
               </button>
@@ -1718,17 +1510,17 @@ export default function App() {
             <div className="glass rounded-2xl p-4 space-y-2.5 border border-white/5 bg-white/5">
               <h4 className="text-[11px] font-bold text-slate-300 tracking-wide uppercase flex items-center gap-1.5">
                 <QrCode className="w-3.5 h-3.5 text-pink-400" />
-                <span>QR Scanner Guide</span>
+                <span>{translations[lang].qr_guide_title}</span>
               </h4>
               <p className="text-[10px] leading-relaxed text-slate-400">
-                Authorized partners scan your vehicle's secure QR code to instantly pull and log live service records. Look up your scanner codes under the Partner Portal.
+                {translations[lang].qr_guide_desc}
               </p>
               <div className="flex items-center justify-center p-2 rounded-xl bg-slate-950/60 border border-white/5 mt-1">
                 <div className="flex flex-col items-center gap-1 py-1">
                   <div className="w-10 h-10 border-2 border-dashed border-pink-500/30 rounded-lg flex items-center justify-center text-pink-400 animate-pulse">
                     <QrCode className="w-5 h-5 opacity-60" />
                   </div>
-                  <span className="text-[9px] text-slate-500 font-mono tracking-tighter">Scan Reader Active</span>
+                  <span className="text-[9px] text-slate-500 font-mono tracking-tighter">{translations[lang].qr_active}</span>
                 </div>
               </div>
             </div>
@@ -1740,18 +1532,18 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <h4 className="text-[11px] font-bold text-slate-300 tracking-wide uppercase flex items-center gap-1.5">
                   <Fuel className="w-3.5 h-3.5 text-amber-500 font-bold animate-pulse" />
-                  <span>Phnom Penh Fuel Prices</span>
+                  <span>{translations[lang].fuel_prices}</span>
                 </h4>
-                <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">Live Today</span>
+                <span className="text-[9px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded">{translations[lang].live_today}</span>
               </div>
               
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="bg-slate-950/50 border border-white/5 p-1.5 rounded-xl">
-                  <span className="text-[9px] block text-slate-500 uppercase font-bold tracking-wider">Regular</span>
+                  <span className="text-[9px] block text-slate-500 uppercase font-bold tracking-wider">{translations[lang].regular}</span>
                   <span className="text-xs font-mono font-bold text-slate-200">$1.08<span className="text-[9px] text-slate-500 font-normal">/L</span></span>
                 </div>
                 <div className="bg-slate-950/50 border border-white/5 p-1.5 rounded-xl">
-                  <span className="text-[9px] block text-slate-500 uppercase font-bold tracking-wider">Premium</span>
+                  <span className="text-[9px] block text-slate-500 uppercase font-bold tracking-wider">{translations[lang].premium}</span>
                   <span className="text-xs font-mono font-bold text-pink-400">$1.18<span className="text-[9px] text-slate-500 font-normal">/L</span></span>
                 </div>
               </div>
@@ -1762,14 +1554,13 @@ export default function App() {
                   onClick={() => {
                     setForumPreFilledCategory("Monsoon / Water Drainage damage");
                     setActiveTab("forum");
-                    setIsMobileMenuOpen(false);
                   }}
                   className="w-full text-left py-2 px-2.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/25 border border-orange-500/20 text-orange-450 text-orange-400 hover:text-orange-300 transition text-[10px] font-bold flex items-center justify-between cursor-pointer group"
                   title="Report unpaved street flooding or structural drainage issues directly to the Help Forum"
                 >
                   <span className="flex items-center gap-1.5">
                     <ShieldAlert className="w-3.5 h-3.5 group-hover:animate-bounce" />
-                    <span>Report a Road Hazard</span>
+                    <span>{translations[lang].road_hazard}</span>
                   </span>
                   <ChevronRight className="w-3 h-3 text-slate-500 group-hover:text-amber-400" />
                 </button>
@@ -1801,62 +1592,13 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'role_switcher' && userProfile && (
-                <RoleSwitcher 
-                  userProfile={userProfile}
-                  vehicles={vehicles}
-                  onRoleChanged={(newProfile) => {
-                    // Clear the previous cache to prevent showing stale role-scoped data
-                    setVehicles([]);
-                    setRecords([]);
-                    setUserProfile(newProfile);
-                    // Re-bootstrap user dashboard data specifically scoped to their new role's permissions
-                    bootstrapData();
-
-                    const activeRole = newProfile.active_role || newProfile.role;
-                    switch (activeRole) {
-                      case "Vehicle Owner":
-                        setActiveTab("dashboard");
-                        break;
-                      case "Vehicle Manager":
-                        setActiveTab("fleet_manager");
-                        break;
-                      case "Driver":
-                        setActiveTab("fleet_manager"); // Driver Console
-                        break;
-                      case "Garage Owner":
-                      case "Garage Staff":
-                        setActiveTab("parts_control"); // Business Workstation
-                        break;
-                      case "Petrol Station Partner":
-                        setActiveTab("station_control");
-                        break;
-                      case "EV Charging Station Partner":
-                        setActiveTab("ev_station_control");
-                        break;
-                      case "Spare Part Shop":
-                        setActiveTab("parts_control");
-                        break;
-                      case "Admin":
-                        setActiveTab("admin");
-                        break;
-                      case "Freelance Mechanic":
-                        setActiveTab("freelance_control");
-                        break;
-                      default:
-                        setActiveTab("dashboard");
-                    }
-                  }}
-                />
-              )}
-
               {activeTab === 'dashboard' && (
                 <Dashboard
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   onAddVehicle={() => setShowAddVehicleModal(true)}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   selectedVehicle={selectedVehicle}
-                  records={filteredRecords}
+                  records={records}
                   onDeleteVehicle={(id) => handleDeleteVehicle(id)}
                   onAddRecord={() => {
                     if (selectedVehicle) {
@@ -1875,9 +1617,9 @@ export default function App() {
               {activeTab === 'fleet_manager' && (
                 <FleetManager 
                   userProfile={userProfile} 
-                  appVehicles={filteredVehicles}
+                  appVehicles={vehicles}
                   setAppVehicles={setVehicles}
-                  appRecords={filteredRecords}
+                  appRecords={records}
                   setAppRecords={setRecords}
                   onRefreshData={handleRefreshAllDataFromServer}
                   isSimulatedOffline={isSimulatedOffline}
@@ -1888,8 +1630,8 @@ export default function App() {
               {activeTab === 'garage_control' && (
                 <GarageDashboard 
                   userProfile={userProfile}
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   onLogRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1903,20 +1645,12 @@ export default function App() {
                 />
               )}
 
-              {/* Role specific: EV Station monitoring console */}
-              {activeTab === 'ev_station_control' && (
-                <EvStationDashboard 
-                  userProfile={userProfile}
-                  onRefreshData={handleRefreshAllDataFromServer}
-                />
-              )}
-
               {/* Role specific: Combined Multi-Service Business Workstation */}
               {activeTab === 'parts_control' && (
                 <PartsDashboard 
                   userProfile={userProfile}
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   onLogRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -1932,10 +1666,10 @@ export default function App() {
 
               {activeTab === 'alarms' && (
                 <RemindersPanel
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
-                  records={filteredRecords}
+                  records={records}
                 />
               )}
 
@@ -1945,16 +1679,15 @@ export default function App() {
 
               {activeTab === 'ai-chat' && (
                 <AICareAssistant
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
-                  records={filteredRecords}
                   onNavigateToGarages={(servCat) => handleDiagnosisFocusTransition(servCat)}
                 />
               )}
 
               {activeTab === 'reports' && (
                 <VehicleReportCard
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                 />
@@ -1962,19 +1695,18 @@ export default function App() {
 
               {activeTab === 'garages' && (
                 <MyCarCareMap
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   activeUser={userProfile}
                   onRefreshData={handleRefreshAllDataFromServer}
                   onLogRecordExternal={handleLogRecordExternal}
                   onNavigateTab={(tabName) => setActiveTab(tabName)}
-                  selectedVehicle={selectedVehicle}
                 />
               )}
 
               {activeTab === 'partner_portal' && (
                 <PartnerPortal
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   onRefreshData={handleRefreshAllDataFromServer}
@@ -1984,15 +1716,15 @@ export default function App() {
 
               {activeTab === 'admin' && (
                 <AdminPanel
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   garages={garages}
                 />
               )}
 
               {activeTab === 'forum' && (
                 <HelpForum
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onRefreshData={handleRefreshAllDataFromServer}
                   initialCategory={forumPreFilledCategory}
@@ -2002,7 +1734,7 @@ export default function App() {
 
               {activeTab === 'classifieds' && (
                 <ClassifiedsMarketplace
-                  vehicles={filteredVehicles}
+                  vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -2011,24 +1743,24 @@ export default function App() {
               {activeTab === 'role_forms' && (
                 <RoleBasedFormSystem
                   userProfile={userProfile}
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
               )}
 
               {activeTab === 'vehicle_powertrains' && (
                 <VehicleRegistrationSystem
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
               )}
 
               {activeTab === 'quick_service_workspace' && (
                 <QuickServiceLogSystem
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   activeVehicle={selectedVehicle}
                   onSelectVehicle={(v) => setSelectedVehicle(v)}
                   onAddRecord={handleLogRecordExternal}
@@ -2038,8 +1770,8 @@ export default function App() {
 
               {activeTab === 'coins' && (
                 <MyCarCareCoinSystem
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   activeUser={userProfile}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -2048,8 +1780,8 @@ export default function App() {
               {activeTab === 'fix_my_car_bidding' && userProfile && (
                 <FixMyCarBiddingModule
                   userProfile={userProfile}
-                  vehicles={filteredVehicles}
-                  records={filteredRecords}
+                  vehicles={vehicles}
+                  records={records}
                   onAddRecordExternal={handleLogRecordExternal}
                   onRefreshData={handleRefreshAllDataFromServer}
                 />
@@ -2355,21 +2087,7 @@ export default function App() {
                   <label className="text-[10px] font-bold text-slate-500 uppercase block">Active Role</label>
                   <select
                     value={userProfile.role}
-                    onChange={async (e) => {
-                      const nextRole = e.target.value as any;
-                      const nextProfile = { ...userProfile, role: nextRole };
-                      setUserProfile(nextProfile);
-                      try {
-                        await fetch("/api/profile", {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify(nextProfile)
-                        });
-                        await bootstrapData();
-                      } catch (err) {
-                        console.error("Failed to update profile role on server:", err);
-                      }
-                    }}
+                    onChange={(e) => setUserProfile({ ...userProfile, role: e.target.value as any })}
                     className="w-full bg-slate-900 border border-white/10 p-2 px-3 text-xs rounded-xl focus:outline-none text-slate-100"
                   >
                     <option value="Vehicle Owner" className="bg-slate-900">Vehicle Owner</option>
@@ -2377,7 +2095,6 @@ export default function App() {
                     <option value="Driver / Staff" className="bg-slate-900">Driver / Staff</option>
                     <option value="Garage Owner" className="bg-slate-900">Garage Owner</option>
                     <option value="Petrol Station Partner" className="bg-slate-900">Petrol Station Partner</option>
-                    <option value="EV Charging Station Partner" className="bg-slate-900">EV Charging Station Partner</option>
                     <option value="Spare Part Shop" className="bg-slate-900">Spare Part Shop</option>
                     <option value="Admin" className="bg-slate-900">Admin</option>
                     <option value="Freelance Mechanic" className="bg-slate-900">Freelance Mechanic</option>
@@ -2455,57 +2172,11 @@ export default function App() {
               </p>
 
               <button
-                onClick={async () => {
-                  try {
-                    await fetch("/api/profile", {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(userProfile)
-                    });
-                    await bootstrapData();
-                  } catch (err) {
-                    console.error("Failed to save profile on server:", err);
-                  }
-                  setShowSettingsModal(false);
-                }}
+                onClick={() => setShowSettingsModal(false)}
                 className="w-full py-2.5 bg-sky-500 hover:bg-sky-600 active:bg-sky-700 text-slate-900 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-lg"
               >
                 <Check className="w-4 h-4" />
                 <span>Save user metadata</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 4: Sync History / Audit Logs */}
-      {showSyncHistoryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSyncHistoryModal(false)}></div>
-          <div className="glass rounded-3xl p-6 max-w-md w-full relative z-10 space-y-4 shadow-2xl bg-slate-950/95 backdrop-blur-xl border border-white/10 text-left">
-            
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-1.5">
-                <History className="w-5 h-5 text-sky-400" />
-                <h3 className="text-base font-bold text-slate-100 uppercase tracking-wide">Sync Audit History</h3>
-              </div>
-              <button onClick={() => setShowSyncHistoryModal(false)} className="text-slate-400 hover:text-slate-200 cursor-pointer">
-                <X className="w-5 h-5 cursor-pointer" />
-              </button>
-            </div>
-
-            <p className="text-[11px] text-slate-400 leading-normal">
-              Below is a record of successful offline-to-online queue sync operations, including automatic conflict resolution, duplications filters, and odometer auto-corrections.
-            </p>
-
-            <SyncHistory onClose={() => setShowSyncHistoryModal(false)} />
-
-            <div className="pt-2 border-t border-white/5 flex justify-end">
-              <button
-                onClick={() => setShowSyncHistoryModal(false)}
-                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer"
-              >
-                Close Audit Logs
               </button>
             </div>
           </div>
@@ -2528,66 +2199,6 @@ export default function App() {
         onAddReminder={handleOnboardingAddReminder}
         onGrantCoins={handleOnboardingGrantCoins}
       />
-
-      {/* Sync success toast notification */}
-      <AnimatePresence>
-        {syncToast && syncToast.show && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-50 max-w-sm w-[90vw] md:w-full p-4 bg-slate-900/95 border border-emerald-500/35 rounded-2xl shadow-2xl backdrop-blur-md text-slate-100 flex items-start gap-3 text-left animate-fadeIn"
-          >
-            <div className="p-2 bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 rounded-xl shrink-0 mt-0.5">
-              <FileCheck className="w-5 h-5" />
-            </div>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center gap-1.5 justify-between">
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-widest font-mono">
-                  Cloud Live
-                </span>
-                <span className="text-[9px] text-slate-500 font-medium font-mono">Just now</span>
-              </div>
-              <h4 className="text-xs font-black text-slate-100 uppercase tracking-wide">
-                Database Backup Completed
-              </h4>
-              <p className="text-[11px] text-slate-400 leading-normal">
-                Successfully synced <strong>{syncToast.count}</strong> locally-cached maintenance log(s) to the secure server database. Your diagnostic data is now backed up safely!
-              </p>
-              {(syncToast.duplicatesSkipped > 0 || syncToast.autoCorrected > 0 || syncToast.merged > 0) && (
-                <div className="pt-2 border-t border-slate-800 space-y-1 text-[10px] text-slate-400 font-mono">
-                  <div className="font-bold text-slate-300">Conflict Resolutions:</div>
-                  {syncToast.duplicatesSkipped > 0 && (
-                    <div className="flex items-center gap-1 text-sky-400">
-                      <span>•</span>
-                      <span>{syncToast.duplicatesSkipped} duplicate log(s) safely filtered out</span>
-                    </div>
-                  )}
-                  {syncToast.autoCorrected > 0 && (
-                    <div className="flex items-center gap-1 text-amber-400">
-                      <span>•</span>
-                      <span>{syncToast.autoCorrected} chronological odometer collision(s) auto-corrected</span>
-                    </div>
-                  )}
-                  {syncToast.merged > 0 && (
-                    <div className="flex items-center gap-1 text-teal-400">
-                      <span>•</span>
-                      <span>{syncToast.merged} same-day entries merged</span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <button 
-              onClick={() => setSyncToast(null)}
-              className="p-1 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-              title="Dismiss"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

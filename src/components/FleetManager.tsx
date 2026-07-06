@@ -142,7 +142,7 @@ interface FleetProfile {
   telegramChatId?: string;
 }
 
-export interface FleetVehicle {
+interface FleetVehicle {
   id: string;
   name: string;
   plateNumber: string;
@@ -232,7 +232,6 @@ interface RegisteredUser {
 import { VehicleProfile, MaintenanceRecord } from "../types";
 import { syncVehicleRecords } from "../utils/dataSync";
 import WireframeStudio from "./WireframeStudio";
-import FleetReportsTab from "./FleetReportsTab";
 
 export default function FleetManager({ 
   userProfile,
@@ -258,26 +257,11 @@ export default function FleetManager({
   const [activeRole, setActiveRole] = useState<'Manager' | 'Driver' | 'Owner'>('Manager');
 
   // Subscription state
-  const [isUpgraded, setIsUpgraded] = useState<boolean>(
-    userProfile?.subscription_status === 'Premium' || userProfile?.active_role === 'Vehicle Manager'
-  );
-  const [subscriptionPlan, setSubscriptionPlan] = useState<string>(
-    userProfile?.subscription_plan || 'sme'
-  );
-
-  useEffect(() => {
-    if (userProfile) {
-      if (userProfile.subscription_status) {
-        setIsUpgraded(userProfile.subscription_status === 'Premium');
-      }
-      if (userProfile.subscription_plan) {
-        setSubscriptionPlan(userProfile.subscription_plan);
-      }
-    }
-  }, [userProfile]);
+  const [isUpgraded, setIsUpgraded] = useState<boolean>(true);
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>('sme'); // 'bronze', 'sme', 'enterprise'
 
   // Sub tabs for Fleet Manager Panel
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'vehicles' | 'drivers' | 'trips' | 'expenses' | 'ai' | 'notifications' | 'subscription' | 'wireframes' | 'reports'>('dashboard');
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'vehicles' | 'drivers' | 'trips' | 'expenses' | 'ai' | 'notifications' | 'subscription' | 'wireframes'>('dashboard');
 
   // Driver Express Trip Form states
   const [driverVehId, setDriverVehId] = useState<string>("");
@@ -1550,18 +1534,6 @@ export default function FleetManager({
           <span>Expenses & Fuel</span>
           {activeSubTab === 'expenses' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full"></div>}
         </button>
-        {activeRole === 'Manager' && (
-          <button
-            onClick={() => setActiveSubTab('reports')}
-            className={`pb-3 text-xs font-bold px-1 transition relative whitespace-nowrap flex items-center gap-1 cursor-pointer ${
-              activeSubTab === 'reports' ? "text-emerald-400" : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Reports & Export</span>
-            {activeSubTab === 'reports' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full"></div>}
-          </button>
-        )}
         <button
           onClick={() => setActiveSubTab('wireframes')}
           className={`pb-3 text-xs font-bold px-1 transition relative whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
@@ -3119,15 +3091,6 @@ export default function FleetManager({
           expenses={expenses}
           setExpenses={setExpenses}
           triggerNotification={triggerNotification}
-        />
-      )}
-
-      {activeSubTab === 'reports' && activeRole === 'Manager' && (
-        <FleetReportsTab 
-          vehicles={vehicles}
-          trips={trips}
-          expenses={expenses}
-          lang={lang}
         />
       )}
 

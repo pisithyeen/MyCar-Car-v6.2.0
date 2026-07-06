@@ -3,30 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export * from "./types/database";
-
 export interface UserProfile {
   id: number;
   name: string;
   email: string;
   phone: string;
-  role: 'Vehicle Owner' | 'Vehicle Manager' | 'Driver' | 'Garage Owner' | 'Garage Staff' | 'Spare Part Shop' | 'Petrol Station Partner' | 'EV Charging Station Partner' | 'Freelance Mechanic' | 'Admin';
+  role: 'Vehicle Owner' | 'Vehicle Manager' | 'Driver / Staff' | 'Garage Owner' | 'Petrol Station Partner' | 'Spare Part Shop' | 'Admin' | 'Freelance Mechanic';
   location: string; // e.g., "Phnom Penh", "Siem Reap", "Battambang"
   status?: 'Pending' | 'Approved' | 'Suspended';
   businessName?: string;
   licenseNumber?: string;
   activatedModules?: string[];
   isMultiService?: boolean;
-
-  // Multi-role logic state fields
-  active_role?: 'Vehicle Owner' | 'Vehicle Manager' | 'Driver' | 'Garage Owner' | 'Garage Staff' | 'Spare Part Shop' | 'Petrol Station Partner' | 'EV Charging Station Partner' | 'Freelance Mechanic' | 'Admin';
-  active_vehicle_id?: string;
-  active_business_id?: string;
-  active_module?: 'garage' | 'spare_part_shop' | 'petrol_station' | 'ev_charging_station' | 'marketplace_seller';
-  permission_group?: 'Receptionist' | 'Mechanic' | 'Cashier' | 'Garage Manager' | 'Super Admin';
-  user_roles?: ('Vehicle Owner' | 'Vehicle Manager' | 'Driver' | 'Garage Owner' | 'Garage Staff' | 'Spare Part Shop' | 'Petrol Station Partner' | 'EV Charging Station Partner' | 'Freelance Mechanic' | 'Admin')[];
-  subscription_status?: 'Free' | 'Premium';
-  subscription_plan?: 'basic' | 'pro' | 'business';
 }
 
 export type EngineType =
