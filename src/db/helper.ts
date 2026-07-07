@@ -13,8 +13,11 @@ import {
   forumComments, 
   partListings, 
   partOffers, 
-  partReports 
+  partReports,
+  qrStickerOrders
 } from './schema.ts';
+
+export { db, eq, and, users, qrStickerOrders };
 import { 
   UserProfile, 
   VehicleProfile, 
@@ -31,7 +34,7 @@ import {
   PartReport 
 } from '../types.ts';
 
-function isDbAvailable(): boolean {
+export function isDbAvailable(): boolean {
   return typeof process !== 'undefined' && !!process.env.SQL_HOST;
 }
 

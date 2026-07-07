@@ -3,6 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface BusinessSubscription {
+  planType: 'Free' | 'Home' | 'Pro' | 'Enterprise';
+  isVerified: boolean;
+  featuredListing: boolean;
+  staffLimit: number;
+}
+
+export interface GarageBusinessSubscription extends BusinessSubscription {
+  diagnosticBays: number;
+  hasEquipmentVerification: boolean;
+}
+
+export interface ShopBusinessSubscription extends BusinessSubscription {
+  partsCountLimit: number;
+  eCommerceEnabled: boolean;
+}
+
+export interface UserSubscription {
+  planType: 'Free' | 'Home' | 'Pro' | 'Enterprise';
+  status: 'active' | 'canceled' | 'past_due';
+  expiryDate?: string;
+  vehicleCount: number;
+  vehicleLimit: number;
+  postCount: number;
+  postLimit: number;
+  aiCount: number;
+  aiLimit: number;
+}
+
 export interface UserProfile {
   id: number;
   name: string;
@@ -15,6 +44,18 @@ export interface UserProfile {
   licenseNumber?: string;
   activatedModules?: string[];
   isMultiService?: boolean;
+  
+  // Subscription / Monetization fields for MVP
+  subscriptionTier?: 'Free' | 'Home' | 'Pro' | 'Enterprise';
+  subscriptionStatus?: 'active' | 'canceled' | 'past_due';
+  subscriptionExpiry?: string;
+  aiUsageCount?: number;
+  aiUsageLimit?: number;
+  businessSubscriptionTier?: 'None' | 'Garage_Basic' | 'Garage_Pro' | 'Shop_Basic' | 'Shop_Pro' | 'Freelancer_Pro' | 'Station_Pro';
+  verifiedBadge?: boolean;
+  boostCredits?: number;
+  businessSubscription?: BusinessSubscription | GarageBusinessSubscription | ShopBusinessSubscription;
+  subscription?: UserSubscription;
 }
 
 export type EngineType =
@@ -48,6 +89,12 @@ export interface VehicleProfile {
   purchasePrice?: number;
   photoUrl?: string;
   notes?: string;
+
+  // Marketplace fields
+  isForSale?: boolean;
+  salePrice?: number;
+  saleDescription?: string;
+  marketplaceStatus?: 'Not Listed' | 'Listed for Sale' | 'Sold';
 
   // New improved vehicle registration fields
   owner?: string;

@@ -50,10 +50,154 @@ import {
   getPartListings,
   insertPartListing,
   insertPartOffer,
-  insertPartReport
+  insertPartReport,
+  isDbAvailable,
+  db,
+  eq,
+  users,
+  qrStickerOrders
 } from "./src/db/helper.ts";
 
 dotenv.config();
+
+// Helper to determine businessSubscription based on tier and role
+function getBusinessSubscription(businessTier: string | undefined, role: string): any {
+  const isBusinessRole = ["Garage Owner", "Petrol Station Partner", "Spare Part Shop", "Freelance Mechanic", "Vehicle Manager"].includes(role);
+  const tierStr = businessTier || "None";
+  
+  if (!isBusinessRole) {
+    return {
+      planType: "Free",
+      isVerified: false,
+      featuredListing: false,
+      staffLimit: 0
+    };
+  }
+
+  let base: any = {
+    planType: 'Free',
+    isVerified: false,
+    featuredListing: false,
+    staffLimit: 1
+  };
+
+  switch (tierStr) {
+    case 'Garage_Pro':
+      base = {
+        planType: 'Pro',
+        isVerified: true,
+        featuredListing: true,
+        staffLimit: 30
+      };
+      break;
+    case 'Shop_Pro':
+      base = {
+        planType: 'Pro',
+        isVerified: true,
+        featuredListing: true,
+        staffLimit: 15
+      };
+      break;
+    case 'Freelancer_Pro':
+      base = {
+        planType: 'Pro',
+        isVerified: true,
+        featuredListing: false,
+        staffLimit: 2
+      };
+      break;
+    case 'Station_Pro':
+      base = {
+        planType: 'Pro',
+        isVerified: true,
+        featuredListing: true,
+        staffLimit: 25
+      };
+      break;
+    case 'Garage_Basic':
+      base = {
+        planType: 'Home',
+        isVerified: false,
+        featuredListing: false,
+        staffLimit: 5
+      };
+      break;
+    case 'Shop_Basic':
+      base = {
+        planType: 'Home',
+        isVerified: false,
+        featuredListing: false,
+        staffLimit: 3
+      };
+      break;
+    default:
+      base = {
+        planType: 'Free',
+        isVerified: false,
+        featuredListing: false,
+        staffLimit: 1
+      };
+      break;
+  }
+
+  if (role === "Garage Owner") {
+    return {
+      ...base,
+      diagnosticBays: tierStr.includes('Pro') ? 5 : 2,
+      hasEquipmentVerification: tierStr.includes('Pro') ? true : false
+    };
+  } else if (role === "Spare Part Shop") {
+    return {
+      ...base,
+      partsCountLimit: tierStr.includes('Pro') ? 500 : 50,
+      eCommerceEnabled: tierStr.includes('Pro') ? true : false
+    };
+  }
+
+  return base;
+}
+
+// Helper to determine subscription tier limits and resource usage counters
+function getUserSubscription(user: any): any {
+  if (!user) return null;
+  const tier = user.subscriptionTier || 'Free';
+  
+  const vehicleLimit = tier === 'Free' ? 2 : tier === 'Home' ? 5 : tier === 'Pro' ? 30 : 999999;
+  const postLimit = tier === 'Free' ? 1 : tier === 'Home' ? 5 : tier === 'Pro' ? 30 : 999999;
+  const aiLimit = user.aiUsageLimit || (tier === 'Free' ? 3 : tier === 'Home' ? 15 : tier === 'Pro' ? 50 : 999999);
+
+  let vehicleCount = 0;
+  try {
+    if (typeof vehicles !== 'undefined' && Array.isArray(vehicles)) {
+      vehicleCount = vehicles.filter((v: any) => v.owner === user.name || v.owner === "Yeon Pisith" || v.owner === "Yeon Pisith (You)").length;
+    }
+  } catch (e) {
+    // Safely ignore TDZ reference errors on startup
+  }
+  
+  let postCount = 0;
+  try {
+    if (typeof classifiedListingsDatabase !== 'undefined' && Array.isArray(classifiedListingsDatabase)) {
+      postCount = classifiedListingsDatabase.filter((l: any) => l.contactName === user.name && l.availabilityStatus === 'In Stock').length;
+    }
+  } catch (e) {
+    // Safely ignore TDZ reference errors on startup
+  }
+  
+  const aiCount = user.aiUsageCount || 0;
+
+  return {
+    planType: tier,
+    status: user.subscriptionStatus || 'active',
+    expiryDate: user.subscriptionExpiry || '2027-01-01',
+    vehicleCount,
+    vehicleLimit,
+    postCount,
+    postLimit,
+    aiCount,
+    aiLimit
+  };
+}
 
 // Initialize Express App
 const app = express();
@@ -70,7 +214,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 12 345 678",
     role: "Vehicle Owner",
     location: "Phnom Penh",
-    status: "Approved"
+    status: "Approved",
+    subscriptionTier: "Free",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2027-01-01",
+    aiUsageCount: 1,
+    aiUsageLimit: 3,
+    businessSubscriptionTier: "None",
+    verifiedBadge: false,
+    boostCredits: 0
   },
   {
     id: 2,
@@ -81,7 +233,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Siem Reap",
     status: "Pending",
     businessName: "Angkor Speed Auto Repair",
-    licenseNumber: "Co-8271/2026-KH"
+    licenseNumber: "Co-8271/2026-KH",
+    subscriptionTier: "Free",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2027-01-01",
+    aiUsageCount: 0,
+    aiUsageLimit: 15,
+    businessSubscriptionTier: "Garage_Basic",
+    verifiedBadge: false,
+    boostCredits: 1
   },
   {
     id: 3,
@@ -92,7 +252,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Pending",
     businessName: "TotalEnergies Sothearos Blvd",
-    licenseNumber: "Co-6211/2026-KH"
+    licenseNumber: "Co-6211/2026-KH",
+    subscriptionTier: "Free",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2027-01-01",
+    aiUsageCount: 0,
+    aiUsageLimit: 15,
+    businessSubscriptionTier: "None",
+    verifiedBadge: true,
+    boostCredits: 0
   },
   {
     id: 4,
@@ -103,7 +271,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Sihanoukville",
     status: "Approved",
     businessName: "Sihanoukville Toyota Parts",
-    licenseNumber: "Co-1934/2026-KH"
+    licenseNumber: "Co-1934/2026-KH",
+    subscriptionTier: "Free",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2027-01-01",
+    aiUsageCount: 0,
+    aiUsageLimit: 15,
+    businessSubscriptionTier: "Shop_Basic",
+    verifiedBadge: true,
+    boostCredits: 2
   },
   {
     id: 5,
@@ -114,7 +290,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Battambang",
     status: "Pending",
     businessName: "Sokna Express Towing",
-    licenseNumber: "Co-4188/2026-KH"
+    licenseNumber: "Co-4188/2026-KH",
+    subscriptionTier: "Free",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2027-01-01",
+    aiUsageCount: 0,
+    aiUsageLimit: 3,
+    businessSubscriptionTier: "Freelancer_Pro",
+    verifiedBadge: false,
+    boostCredits: 1
   },
   {
     id: 6,
@@ -125,7 +309,15 @@ let simulatedUsersDatabase: UserProfile[] = [
     location: "Phnom Penh",
     status: "Suspended",
     businessName: "Phnom Penh Mobile Repair",
-    licenseNumber: "Co-4819/2026-KH"
+    licenseNumber: "Co-4819/2026-KH",
+    subscriptionTier: "Free",
+    subscriptionStatus: "canceled",
+    subscriptionExpiry: "2026-01-01",
+    aiUsageCount: 3,
+    aiUsageLimit: 3,
+    businessSubscriptionTier: "None",
+    verifiedBadge: false,
+    boostCredits: 0
   },
   {
     id: 7,
@@ -134,9 +326,23 @@ let simulatedUsersDatabase: UserProfile[] = [
     phone: "+855 23 888 888",
     role: "Admin",
     location: "Phnom Penh",
-    status: "Approved"
+    status: "Approved",
+    subscriptionTier: "Enterprise",
+    subscriptionStatus: "active",
+    subscriptionExpiry: "2030-12-31",
+    aiUsageCount: 0,
+    aiUsageLimit: 99999,
+    businessSubscriptionTier: "None",
+    verifiedBadge: true,
+    boostCredits: 999
   }
 ];
+
+// Initialize businessSubscription and subscription for all preloaded simulated users
+simulatedUsersDatabase.forEach(user => {
+  user.businessSubscription = getBusinessSubscription(user.businessSubscriptionTier, user.role);
+  user.subscription = getUserSubscription(user);
+});
 
 let activeProfile: any = simulatedUsersDatabase[0];
 
@@ -2342,6 +2548,38 @@ app.get("/api/qr-tokens", (req: Request, res: Response) => {
   });
 });
 
+// Server-Sent Events (SSE) Client registry for Real-time Multi-user updates
+let sseClients: any[] = [];
+
+app.get("/api/realtime/stream", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+
+  // Send initial keep-alive comment
+  res.write(": ok\n\n");
+
+  const client = { id: Date.now(), res };
+  sseClients.push(client);
+
+  req.on("close", () => {
+    sseClients = sseClients.filter(c => c.id !== client.id);
+  });
+});
+
+function broadcastSSE(event: string, data: any) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(client => {
+    try {
+      client.res.write(payload);
+    } catch (err) {
+      // client connection might be closed
+    }
+  });
+}
+
 // Scan QR Token with Zero-Trust ABAC permissions check
 app.post("/api/qr/scan", (req: Request, res: Response) => {
   const { token, scannedByGarageId, scannedByGarageName } = req.body;
@@ -2363,6 +2601,9 @@ app.post("/api/qr/scan", (req: Request, res: Response) => {
     scannedAt: new Date().toISOString()
   };
   scanLogs.unshift(newScan);
+
+  // Broadcast real-time scan event
+  broadcastSSE("scan_registered", newScan);
 
   // Return masked owner profiles fitting privacy settings
   if (found.type === "user") {
@@ -2469,6 +2710,9 @@ app.post("/api/qr/manual-lookup", (req: Request, res: Response) => {
   };
   scanLogs.unshift(newScan);
 
+  // Broadcast real-time scan event
+  broadcastSSE("scan_registered", newScan);
+
   if (found.type === "user") {
     res.json({
       success: true,
@@ -2561,6 +2805,9 @@ app.post("/api/owner/partner-requests/:id/approve", (req: Request, res: Response
     sentAt: new Date().toISOString()
   });
 
+  // Broadcast real-time permission approval
+  broadcastSSE("partner_request_updated", { id, status: 'approved', request: foundReq });
+
   res.json({ success: true, request: foundReq });
 });
 
@@ -2571,6 +2818,10 @@ app.post("/api/owner/partner-requests/:id/reject", (req: Request, res: Response)
   if (!foundReq) return res.status(404).json({ error: "Access request not found." });
 
   foundReq.status = 'rejected';
+
+  // Broadcast real-time permission rejection
+  broadcastSSE("partner_request_updated", { id, status: 'rejected', request: foundReq });
+
   res.json({ success: true, request: foundReq });
 });
 
@@ -2643,6 +2894,9 @@ app.post("/api/garage/request-access", (req: Request, res: Response) => {
     status: 'unread',
     sentAt: new Date().toISOString()
   });
+
+  // Broadcast real-time access request creation
+  broadcastSSE("partner_request_created", newReq);
 
   res.json({ success: true, message: "Access request successfully submitted to the customer's mobile device.", request: newReq });
 });
@@ -2773,6 +3027,9 @@ app.post("/api/garage/service-records", (req: Request, res: Response) => {
     sentAt: new Date().toISOString()
   });
 
+  // Broadcast real-time ticket creation
+  broadcastSSE("ticket_created", newRecord);
+
   res.json({ success: true, record: newRecord });
 });
 
@@ -2849,6 +3106,9 @@ app.post("/api/owner/service-records/:id/approve", (req: Request, res: Response)
     sentAt: new Date().toISOString()
   });
 
+  // Broadcast real-time ticket approval
+  broadcastSSE("ticket_updated", { id, status: 'approved', record });
+
   res.json({ success: true, record });
 });
 
@@ -2859,6 +3119,10 @@ app.post("/api/owner/service-records/:id/reject", (req: Request, res: Response) 
   if (idx === -1) return res.status(404).json({ error: "Record not found." });
 
   garageServiceRecords[idx].approvalStatus = 'rejected';
+
+  // Broadcast real-time ticket rejection
+  broadcastSSE("ticket_updated", { id, status: 'rejected', record: garageServiceRecords[idx] });
+
   res.json({ success: true, record: garageServiceRecords[idx] });
 });
 
@@ -2871,6 +3135,10 @@ app.post("/api/owner/service-records/:id/dispute", (req: Request, res: Response)
 
   garageServiceRecords[idx].approvalStatus = 'disputed';
   garageServiceRecords[idx].disputeReason = reason || "Unspecified issue with invoice or parts description.";
+
+  // Broadcast real-time ticket dispute
+  broadcastSSE("ticket_updated", { id, status: 'disputed', record: garageServiceRecords[idx] });
+
   res.json({ success: true, record: garageServiceRecords[idx] });
 });
 
@@ -2894,6 +3162,9 @@ app.post("/api/owner/service-records/:id/request-correction", (req: Request, res
     status: 'unread',
     sentAt: new Date().toISOString()
   });
+
+  // Broadcast real-time ticket correction request
+  broadcastSSE("ticket_updated", { id, status: 'correction_requested', record: garageServiceRecords[idx] });
 
   res.json({ success: true, record: garageServiceRecords[idx] });
 });
@@ -3095,6 +3366,187 @@ app.post("/api/garage/follow-up", (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// AI Usage limit enforcement middleware
+const checkAiUsage = async (req: Request, res: Response, next: any) => {
+  const email = activeProfile?.email || "pisith.yeen@gmail.com";
+  let user: any = null;
+  try {
+    user = await getUserByEmail(email);
+  } catch (err) {
+    console.error("DB error in checkAiUsage:", err);
+  }
+  if (!user) {
+    user = simulatedUsersDatabase.find(u => u.email === email);
+  }
+  if (!user) {
+    return next();
+  }
+
+  const tier = user.subscriptionTier || 'Free';
+  const count = user.aiUsageCount !== undefined && user.aiUsageCount !== null ? user.aiUsageCount : 0;
+  const limit = user.aiUsageLimit !== undefined && user.aiUsageLimit !== null ? user.aiUsageLimit : (tier === 'Free' ? 3 : tier === 'Home' ? 15 : tier === 'Pro' ? 50 : 999999);
+
+  if (count >= limit) {
+    return res.status(403).json({
+      error: "AI Usage Limit Exceeded",
+      message: `You have reached your AI usage limit of ${limit} requests on the ${tier} plan. Please upgrade your subscription package in the Billing & Subscriptions module to get more access.`
+    });
+  }
+
+  // Increment usage count
+  const newCount = count + 1;
+  const dbAvailable = isDbAvailable();
+  if (dbAvailable) {
+    try {
+      await db.update(users).set({ aiUsageCount: newCount }).where(eq(users.email, email));
+    } catch (err) {
+      console.error("Failed to increment AI usage in DB:", err);
+    }
+  }
+
+  // Update in-memory
+  const idx = simulatedUsersDatabase.findIndex(u => u.email === email);
+  if (idx !== -1) {
+    simulatedUsersDatabase[idx].aiUsageCount = newCount;
+  }
+  if (activeProfile && activeProfile.email === email) {
+    activeProfile.aiUsageCount = newCount;
+  }
+
+  next();
+};
+
+// 1. Upgrade Subscription Package
+app.post("/api/subscription/upgrade", async (req: Request, res: Response) => {
+  const { tier, businessTier, verifiedBadge, resetUsage } = req.body;
+  const email = activeProfile?.email || "pisith.yeen@gmail.com";
+
+  let aiLimit = 3;
+  let boostCreds = 0;
+  if (tier === 'Home') {
+    aiLimit = 15;
+    boostCreds = 1;
+  } else if (tier === 'Pro') {
+    aiLimit = 50;
+    boostCreds = 5;
+  } else if (tier === 'Enterprise') {
+    aiLimit = 999999;
+    boostCreds = 20;
+  }
+
+  if (isDbAvailable()) {
+    try {
+      const updateData: any = {};
+      if (tier) updateData.subscriptionTier = tier;
+      if (businessTier) updateData.businessSubscriptionTier = businessTier;
+      if (verifiedBadge !== undefined) updateData.verifiedBadge = verifiedBadge;
+      if (tier) updateData.aiUsageLimit = aiLimit;
+      if (resetUsage) updateData.aiUsageCount = 0;
+      if (boostCreds) updateData.boostCredits = boostCreds;
+
+      await db.update(users).set(updateData).where(eq(users.email, email));
+    } catch (err) {
+      console.error("Database update plan fail:", err);
+    }
+  }
+
+  // Sync memory databases
+  const idx = simulatedUsersDatabase.findIndex(u => u.email === email);
+  if (idx !== -1) {
+    if (tier) simulatedUsersDatabase[idx].subscriptionTier = tier;
+    if (businessTier) simulatedUsersDatabase[idx].businessSubscriptionTier = businessTier;
+    if (verifiedBadge !== undefined) simulatedUsersDatabase[idx].verifiedBadge = verifiedBadge;
+    if (tier) simulatedUsersDatabase[idx].aiUsageLimit = aiLimit;
+    if (resetUsage) simulatedUsersDatabase[idx].aiUsageCount = 0;
+    if (boostCreds) simulatedUsersDatabase[idx].boostCredits = boostCreds;
+    simulatedUsersDatabase[idx].businessSubscription = getBusinessSubscription(simulatedUsersDatabase[idx].businessSubscriptionTier, simulatedUsersDatabase[idx].role);
+    simulatedUsersDatabase[idx].subscription = getUserSubscription(simulatedUsersDatabase[idx]);
+    activeProfile = simulatedUsersDatabase[idx];
+  } else {
+    activeProfile = {
+      ...activeProfile,
+      subscriptionTier: tier || activeProfile.subscriptionTier,
+      businessSubscriptionTier: businessTier || activeProfile.businessSubscriptionTier,
+      verifiedBadge: verifiedBadge !== undefined ? verifiedBadge : activeProfile.verifiedBadge,
+      aiUsageLimit: tier ? aiLimit : activeProfile.aiUsageLimit,
+      aiUsageCount: resetUsage ? 0 : activeProfile.aiUsageCount,
+      boostCredits: boostCreds || activeProfile.boostCredits
+    };
+    activeProfile.businessSubscription = getBusinessSubscription(activeProfile.businessSubscriptionTier, activeProfile.role);
+    activeProfile.subscription = getUserSubscription(activeProfile);
+  }
+
+  // Broadcast real-time subscription update
+  broadcastSSE("ticket_updated", { email, action: 'plan_upgraded', user: activeProfile });
+
+  res.json({ success: true, user: activeProfile });
+});
+
+// In-memory list of QR orders for fallback
+let simulatedQrStickerOrders: any[] = [];
+
+// 2. Submit QR Sticker / Metal Plate Order
+app.post("/api/qr-stickers/order", async (req: Request, res: Response) => {
+  const { vehicleId, stickerType, quantity, phone, deliveryAddress, deliveryFee, totalCost } = req.body;
+  if (!vehicleId || !stickerType || !quantity || !phone || !deliveryAddress) {
+    return res.status(400).json({ error: "Missing required order details" });
+  }
+
+  const orderId = `ord-${Date.now()}`;
+  const newOrder = {
+    id: orderId,
+    userUid: activeProfile?.uid || "user-owner-1",
+    vehicleId,
+    stickerType,
+    quantity: Number(quantity),
+    phone,
+    deliveryAddress,
+    deliveryFee: Number(deliveryFee),
+    totalCost: Number(totalCost),
+    paymentStatus: 'Paid', // MVP simulates instant auto success checkout
+    status: 'Ordered',
+    createdAt: new Date().toISOString()
+  };
+
+  if (isDbAvailable()) {
+    try {
+      await db.insert(qrStickerOrders).values({
+        id: newOrder.id,
+        userUid: newOrder.userUid,
+        vehicleId: newOrder.vehicleId,
+        stickerType: newOrder.stickerType,
+        quantity: newOrder.quantity,
+        phone: newOrder.phone,
+        deliveryAddress: newOrder.deliveryAddress,
+        deliveryFee: newOrder.deliveryFee,
+        totalCost: newOrder.totalCost,
+        paymentStatus: newOrder.paymentStatus,
+        status: newOrder.status,
+      });
+    } catch (err) {
+      console.error("Failed to insert qr sticker order to Postgres:", err);
+    }
+  }
+
+  simulatedQrStickerOrders.unshift(newOrder);
+  broadcastSSE("ticket_updated", { orderId, action: 'sticker_ordered', order: newOrder });
+  res.json({ success: true, order: newOrder });
+});
+
+// 3. Get QR Sticker Orders for current user
+app.get("/api/qr-stickers/orders", async (req: Request, res: Response) => {
+  if (isDbAvailable()) {
+    try {
+      const activeUid = activeProfile?.uid || "user-owner-1";
+      const results = await db.select().from(qrStickerOrders).where(eq(qrStickerOrders.userUid, activeUid));
+      return res.json(results);
+    } catch (err) {
+      console.error("Failed to fetch sticker orders from DB:", err);
+    }
+  }
+  res.json(simulatedQrStickerOrders);
+});
+
 // Get User Profile
 app.get("/api/profile", async (req: Request, res: Response) => {
   try {
@@ -3113,7 +3565,25 @@ app.get("/api/profile", async (req: Request, res: Response) => {
         status: dbUser.status as any,
         businessName: dbUser.businessName || undefined,
         licenseNumber: dbUser.licenseNumber || undefined,
+        
+        // Subscription mapping
+        subscriptionTier: (dbUser.subscriptionTier || 'Free') as any,
+        subscriptionStatus: (dbUser.subscriptionStatus || 'active') as any,
+        subscriptionExpiry: dbUser.subscriptionExpiry || '2027-01-01',
+        aiUsageCount: dbUser.aiUsageCount !== null ? dbUser.aiUsageCount : 0,
+        aiUsageLimit: dbUser.aiUsageLimit !== null ? dbUser.aiUsageLimit : 3,
+        businessSubscriptionTier: (dbUser.businessSubscriptionTier || 'None') as any,
+        verifiedBadge: dbUser.verifiedBadge || false,
+        boostCredits: dbUser.boostCredits || 0,
+        businessSubscription: getBusinessSubscription(dbUser.businessSubscriptionTier || 'None', dbUser.role)
       };
+    } else {
+      if (activeProfile) {
+        activeProfile.businessSubscription = getBusinessSubscription(activeProfile.businessSubscriptionTier || 'None', activeProfile.role);
+      }
+    }
+    if (activeProfile) {
+      activeProfile.subscription = getUserSubscription(activeProfile);
     }
   } catch (err) {
     console.error("Fallback lookup for profile:", err);
@@ -3123,7 +3593,7 @@ app.get("/api/profile", async (req: Request, res: Response) => {
 
 // Update User Profile / Onboard / Switch Login
 app.put("/api/profile", async (req: Request, res: Response) => {
-  const { name, email, phone, role, location, businessName, licenseNumber, status, activatedModules, isMultiService } = req.body;
+  const { name, email, phone, role, location, businessName, licenseNumber, status, activatedModules, isMultiService, subscriptionTier, businessSubscriptionTier, verifiedBadge, boostCredits } = req.body;
   if (!name || !email) {
     return res.status(400).json({ error: "Name and email are required" });
   }
@@ -3142,19 +3612,73 @@ app.put("/api/profile", async (req: Request, res: Response) => {
     });
 
     if (dbUser) {
-      activeProfile = {
-        id: dbUser.id,
-        name: dbUser.name,
-        email: dbUser.email,
-        phone: dbUser.phone || '',
-        role: dbUser.role as any,
-        location: dbUser.location || 'Phnom Penh',
-        status: dbUser.status as any,
-        businessName: dbUser.businessName || undefined,
-        licenseNumber: dbUser.licenseNumber || undefined,
-        activatedModules: activatedModules || undefined,
-        isMultiService: isMultiService || undefined
-      };
+      // Direct SQL updates for any additional subscription fields if provided
+      if (subscriptionTier || businessSubscriptionTier || verifiedBadge !== undefined || boostCredits !== undefined) {
+        await db.update(users)
+          .set({
+            subscriptionTier: subscriptionTier || dbUser.subscriptionTier,
+            businessSubscriptionTier: businessSubscriptionTier || dbUser.businessSubscriptionTier,
+            verifiedBadge: verifiedBadge !== undefined ? verifiedBadge : dbUser.verifiedBadge,
+            boostCredits: boostCredits !== undefined ? boostCredits : dbUser.boostCredits,
+            aiUsageLimit: subscriptionTier === 'Free' ? 3 : subscriptionTier === 'Home' ? 15 : subscriptionTier === 'Pro' ? 50 : 99999
+          })
+          .where(eq(users.email, email));
+      }
+
+      // Re-fetch to get complete updated state
+      const updatedUser = await getUserByEmail(email);
+      if (updatedUser) {
+        activeProfile = {
+          id: updatedUser.id,
+          uid: updatedUser.uid,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          phone: updatedUser.phone || '',
+          role: updatedUser.role as any,
+          location: updatedUser.location || 'Phnom Penh',
+          status: updatedUser.status as any,
+          businessName: updatedUser.businessName || undefined,
+          licenseNumber: updatedUser.licenseNumber || undefined,
+          activatedModules: activatedModules || undefined,
+          isMultiService: isMultiService || undefined,
+          
+          // Subscription mapping
+          subscriptionTier: updatedUser.subscriptionTier as any,
+          subscriptionStatus: updatedUser.subscriptionStatus as any,
+          subscriptionExpiry: updatedUser.subscriptionExpiry || '2027-01-01',
+          aiUsageCount: updatedUser.aiUsageCount || 0,
+          aiUsageLimit: updatedUser.aiUsageLimit || 3,
+          businessSubscriptionTier: updatedUser.businessSubscriptionTier as any,
+          verifiedBadge: updatedUser.verifiedBadge || false,
+          boostCredits: updatedUser.boostCredits || 0,
+          businessSubscription: getBusinessSubscription(updatedUser.businessSubscriptionTier || 'None', updatedUser.role),
+          subscription: getUserSubscription(updatedUser)
+        };
+      }
+    } else {
+      // Fallback in-memory profile update
+      const idx = simulatedUsersDatabase.findIndex(u => u.email === email);
+      if (idx !== -1) {
+        simulatedUsersDatabase[idx] = {
+          ...simulatedUsersDatabase[idx],
+          name,
+          phone: phone || '',
+          role: role || 'Vehicle Owner',
+          location: location || 'Phnom Penh',
+          businessName: businessName || undefined,
+          licenseNumber: licenseNumber || undefined,
+          subscriptionTier: subscriptionTier || simulatedUsersDatabase[idx].subscriptionTier || 'Free',
+          businessSubscriptionTier: businessSubscriptionTier || simulatedUsersDatabase[idx].businessSubscriptionTier || 'None',
+          verifiedBadge: verifiedBadge !== undefined ? verifiedBadge : simulatedUsersDatabase[idx].verifiedBadge,
+          boostCredits: boostCredits !== undefined ? boostCredits : simulatedUsersDatabase[idx].boostCredits
+        };
+        simulatedUsersDatabase[idx].businessSubscription = getBusinessSubscription(simulatedUsersDatabase[idx].businessSubscriptionTier, simulatedUsersDatabase[idx].role);
+        simulatedUsersDatabase[idx].subscription = getUserSubscription(simulatedUsersDatabase[idx]);
+        activeProfile = simulatedUsersDatabase[idx];
+      }
+    }
+    if (activeProfile) {
+      activeProfile.subscription = getUserSubscription(activeProfile);
     }
     res.json(activeProfile);
   } catch (err) {
@@ -3165,7 +3689,11 @@ app.put("/api/profile", async (req: Request, res: Response) => {
 
 // Admin: retrieve list of all registered sandbox users
 app.get("/api/admin/users", (req: Request, res: Response) => {
-  res.json(simulatedUsersDatabase);
+  const usersWithSubs = simulatedUsersDatabase.map(user => ({
+    ...user,
+    subscription: getUserSubscription(user)
+  }));
+  res.json(usersWithSubs);
 });
 
 // Admin: adjust status of business partners
@@ -3208,7 +3736,7 @@ app.post("/api/admin/users/:id/status", (req: Request, res: Response) => {
 // Admin: full user profile updates
 app.put("/api/admin/users/:id", (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, email, phone, role, location, status, businessName, licenseNumber } = req.body;
+  const { name, email, phone, role, location, status, businessName, licenseNumber, isVerified, featuredListing } = req.body;
 
   const idx = simulatedUsersDatabase.findIndex(u => u.id === Number(id));
   if (idx === -1) {
@@ -3216,6 +3744,17 @@ app.put("/api/admin/users/:id", (req: Request, res: Response) => {
   }
 
   const oldUser = { ...simulatedUsersDatabase[idx] };
+
+  let currentSub = simulatedUsersDatabase[idx].businessSubscription;
+  if (!currentSub) {
+    currentSub = getBusinessSubscription(simulatedUsersDatabase[idx].businessSubscriptionTier, role || oldUser.role);
+  }
+
+  if (currentSub) {
+    if (isVerified !== undefined) currentSub.isVerified = isVerified;
+    if (featuredListing !== undefined) currentSub.featuredListing = featuredListing;
+  }
+
   simulatedUsersDatabase[idx] = {
     ...simulatedUsersDatabase[idx],
     name: name || oldUser.name,
@@ -3225,7 +3764,8 @@ app.put("/api/admin/users/:id", (req: Request, res: Response) => {
     location: location || oldUser.location,
     status: status || oldUser.status,
     businessName: businessName !== undefined ? businessName : oldUser.businessName,
-    licenseNumber: licenseNumber !== undefined ? licenseNumber : oldUser.licenseNumber
+    licenseNumber: licenseNumber !== undefined ? licenseNumber : oldUser.licenseNumber,
+    businessSubscription: currentSub
   };
 
   // Sync active persona
@@ -3427,6 +3967,18 @@ app.post("/api/vehicles", async (req: Request, res: Response) => {
   const { brand, model, year, mileage, fuelType, lastOilChangeMileage, lastServiceDate, nickname, plateNumber, vehicleType, purchaseDate, purchasePrice, photoUrl, notes } = req.body;
   if (!brand || !model || !year || !mileage || !fuelType) {
     return res.status(400).json({ error: "Missing required fields for vehicle profile" });
+  }
+
+  // Subscription registration limit enforcement
+  const tier = activeProfile?.subscriptionTier || "Free";
+  const limit = tier === "Free" ? 2 : tier === "Home" ? 5 : tier === "Pro" ? 30 : 999999;
+  const currentCount = vehicles.filter(v => v.owner === activeProfile?.name || v.owner === "Yeon Pisith" || v.id.startsWith('v')).length;
+  
+  if (currentCount >= limit) {
+    return res.status(403).json({
+      error: "Subscription Limit Exceeded",
+      message: `Your current ${tier} subscription plan is limited to maximum ${limit} registered vehicles. Please upgrade your package in the Billing & Subscriptions module to add more vehicles.`
+    });
   }
 
   const newVehicleId = `v-${Date.now()}`;
@@ -3801,7 +4353,7 @@ app.delete("/api/documents/:id", (req: Request, res: Response) => {
 });
 
 // Retrieve dynamic driver AI insights using Gemini
-app.post("/api/ai/driver-insights", async (req: Request, res: Response) => {
+app.post("/api/ai/driver-insights", checkAiUsage, async (req: Request, res: Response) => {
   const { vehicleId } = req.body;
   if (!vehicleId) {
     return res.status(400).json({ error: "Missing vehicleId for insights assessment" });
@@ -4263,7 +4815,7 @@ app.post("/api/reminders/:id/snooze", (req: Request, res: Response) => {
 });
 
 // Request AI custom reminder suggestions using Gemini
-app.post("/api/ai/reminder-suggestion", async (req: Request, res: Response) => {
+app.post("/api/ai/reminder-suggestion", checkAiUsage, async (req: Request, res: Response) => {
   const { vehicleId } = req.body;
   const vehicle = vehicles.find(v => v.id === vehicleId);
   if (!vehicle) {
@@ -4376,7 +4928,7 @@ Return a valid, strict JSON array containing exactly 3 elements, with no surroun
 });
 
 // AI Translation / Bilingual Formatting for Repair Shop Tickets (Requirement 9)
-app.post("/api/ai/partners/bilingual-ticket", async (req: Request, res: Response) => {
+app.post("/api/ai/partners/bilingual-ticket", checkAiUsage, async (req: Request, res: Response) => {
   const { category, productUsed, partsChanged, note, technicianName } = req.body;
   
   const prompt = `
@@ -6084,6 +6636,38 @@ app.post("/api/classifieds/listings", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Missing required listing payload fields." });
   }
 
+  // Marketplace subscription limit enforcement
+  const isVehiclePost = (postType as any) === 'selling_vehicle';
+  const tier = activeProfile?.subscriptionTier || "Free";
+  let vehicleLimit = 1;
+  let partLimit = 1;
+
+  if (tier === "Home") {
+    vehicleLimit = 5;
+    partLimit = 5;
+  } else if (tier === "Pro" || tier === "Enterprise") {
+    vehicleLimit = 999;
+    partLimit = 999;
+  }
+
+  const currentClassifieds = classifiedListingsDatabase.filter(l => l.contactName === activeProfile?.name && l.availabilityStatus === 'In Stock');
+  const activeVehiclesPostCount = currentClassifieds.filter(l => (l.postType as any) === 'selling_vehicle').length;
+  const activePartsPostCount = currentClassifieds.filter(l => (l.postType as any) !== 'selling_vehicle').length;
+
+  if (isVehiclePost && activeVehiclesPostCount >= vehicleLimit) {
+    return res.status(403).json({
+      error: "Marketplace Limit Exceeded",
+      message: `Your current ${tier} plan is limited to maximum ${vehicleLimit} active vehicle selling listing(s). Please upgrade in the Billing & Subscriptions panel to post more.`
+    });
+  }
+
+  if (!isVehiclePost && activePartsPostCount >= partLimit) {
+    return res.status(403).json({
+      error: "Marketplace Limit Exceeded",
+      message: `Your current ${tier} plan is limited to maximum ${partLimit} active spare part listing(s). Please upgrade in the Billing & Subscriptions panel to post more.`
+    });
+  }
+
   const listId = `part-${Date.now()}`;
   const newListing: PartListing = {
     id: listId,
@@ -6479,7 +7063,7 @@ app.post("/api/classifieds/ai-generate", async (req: Request, res: Response) => 
 });
 
 // Powerful Spare Parts Shop AI Endpoint (MyCar Care KH)
-app.post("/api/parts/ai-assist", async (req: Request, res: Response) => {
+app.post("/api/parts/ai-assist", checkAiUsage, async (req: Request, res: Response) => {
   const { taskType, payload } = req.body;
   const client = getGeminiClient();
   
@@ -6815,7 +7399,7 @@ app.post("/api/gemini/generate", async (req: Request, res: Response) => {
 });
 
 // Feature 1: AI Vehicle Care Symptom Checker
-app.post("/api/ai/diagnosis", async (req: Request, res: Response) => {
+app.post("/api/ai/diagnosis", checkAiUsage, async (req: Request, res: Response) => {
   const { vehicleId, symptom, language, vehicle: reqVehicle } = req.body;
   if (!symptom) {
     return res.status(400).json({ error: "Please enter your symptoms to diagnose." });
@@ -6952,7 +7536,7 @@ Respond strictly in JSON matching this schema:
 });
 
 // Feature 4: AI Dream Car Advisor for Cambodia
-app.post("/api/ai/car-advisor", async (req: Request, res: Response) => {
+app.post("/api/ai/car-advisor", checkAiUsage, async (req: Request, res: Response) => {
   const { profile, usage, preference } = req.body;
   if (!profile || !usage || !preference) {
     return res.status(400).json({ error: "Please configure user profile, car usage, and preference parameters." });
@@ -7145,7 +7729,7 @@ Schema:
 });
 
 // Feature 4: Admin analytics queries via AI
-app.post("/api/ai/admin-query", async (req: Request, res: Response) => {
+app.post("/api/ai/admin-query", checkAiUsage, async (req: Request, res: Response) => {
   const { question } = req.body;
   if (!question) {
     return res.status(400).json({ error: "Please enter your query." });

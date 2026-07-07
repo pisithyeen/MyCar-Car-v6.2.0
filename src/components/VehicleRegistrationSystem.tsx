@@ -44,6 +44,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { VehicleProfile, MaintenanceRecord, EngineType } from "../types";
+import { PackageLimitReachedModal } from "./PackageLimitReachedModal";
 
 // Dynamic Role structure matching the request
 type AppRole = 'Car Owner' | 'Garage Owner' | 'Mechanic' | 'Admin';
@@ -52,12 +53,14 @@ interface Props {
   vehicles: VehicleProfile[];
   records: MaintenanceRecord[];
   onRefreshData: () => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const VehicleRegistrationSystem: React.FC<Props> = ({
   vehicles: initialVehicles,
   records: initialRecords,
-  onRefreshData
+  onRefreshData,
+  onNavigateTab
 }) => {
   // Role & Session Simulation State
   const [activeRole, setActiveRole] = useState<AppRole>('Car Owner');
@@ -68,6 +71,27 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
   
   // Selected Vehicle for detail view
   const [selectedV, setSelectedV] = useState<VehicleProfile | null>(null);
+
+  const [profile, setProfile] = useState<any>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitModalDetails, setLimitModalDetails] = useState<{
+    limitType: "vehicle" | "spare_parts" | "business_staff" | "general";
+    currentLimit: number;
+    planName: string;
+    message?: string;
+  }>({
+    limitType: "vehicle",
+    currentLimit: 2,
+    planName: "Free"
+  });
+
+  // Fetch user profile on mount
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(res => res.json())
+      .then(data => setProfile(data))
+      .catch(err => console.error("Error fetching profile in VehicleRegistrationSystem:", err));
+  }, []);
 
   // Sync state when props update
   useEffect(() => {
@@ -346,6 +370,21 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
           unread: true
         };
         setNotifHistory([newNotif, ...notifHistory]);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 403 || errJson.error?.includes("Limit") || errJson.message?.includes("limit") || errJson.message?.includes("Limit")) {
+          const tier = profile?.subscriptionTier || "Free";
+          const limit = tier === "Free" ? 2 : tier === "Home" ? 5 : tier === "Pro" ? 30 : 999999;
+          setLimitModalDetails({
+            limitType: "vehicle",
+            currentLimit: limit,
+            planName: tier,
+            message: errJson.message || `You have reached the registered vehicle limit for your current ${tier} plan. Please upgrade your package to register more vehicles.`
+          });
+          setShowLimitModal(true);
+        } else {
+          setValidationErrors([errJson.error || errJson.message || "Failed to register vehicle profile."]);
+        }
       }
     } catch (err) {
       console.error("Failed to register vehicle:", err);
@@ -1073,6 +1112,19 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
           {activeRole === 'Car Owner' && (
             <button
               onClick={() => {
+                const tier = profile?.subscriptionTier || "Free";
+                const limit = tier === "Free" ? 2 : tier === "Home" ? 5 : tier === "Pro" ? 30 : 999999;
+                const currentCount = vehicles.filter(v => v.owner === profile?.name || v.owner === "Yeon Pisith" || v.id.startsWith('v')).length;
+                if (currentCount >= limit) {
+                  setLimitModalDetails({
+                    limitType: "vehicle",
+                    currentLimit: limit,
+                    planName: tier,
+                    message: `You currently have ${currentCount} registered vehicles. Your current "${tier}" plan is limited to maximum ${limit} registered vehicles.`
+                  });
+                  setShowLimitModal(true);
+                  return;
+                }
                 setBrand("");
                 setModel("");
                 setYear("2020");
@@ -2280,6 +2332,21 @@ export const VehicleRegistrationSystem: React.FC<Props> = ({
             </div>
           )}
         </div>
+
+        <PackageLimitReachedModal
+          isOpen={showLimitModal}
+          onClose={() => setShowLimitModal(false)}
+          onUpgrade={() => {
+            if (onNavigateTab) {
+              onNavigateTab("billing_subscriptions");
+            }
+          }}
+          title="Vehicle Limit Reached"
+          limitType={limitModalDetails.limitType}
+          currentLimit={limitModalDetails.currentLimit}
+          planName={limitModalDetails.planName}
+          message={limitModalDetails.message}
+        />
 
       </div>
 

@@ -39,11 +39,13 @@ import { PartListing, PartOffer, PartReport, VehicleProfile, MaintenanceRecord }
 import MarketplaceDashboard from "./MarketplaceDashboard";
 import MarketplaceCompare from "./MarketplaceCompare";
 import MarketplaceDetail from "./MarketplaceDetail";
+import { PackageLimitReachedModal } from "./PackageLimitReachedModal";
 
 interface ClassifiedsMarketplaceProps {
   vehicles: VehicleProfile[];
   selectedVehicle: VehicleProfile | null;
   onRefreshData: () => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 // Cambodia Marketplace adaptation lists
@@ -102,9 +104,72 @@ const BRANDS_LIST = [
   "Other"
 ];
 
-export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRefreshData }: ClassifiedsMarketplaceProps) {
+export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRefreshData, onNavigateTab }: ClassifiedsMarketplaceProps) {
   // Navigation active components
   const [subTab, setSubTab] = useState<'feed' | 'my-listings' | 'admin-reports' | 'seller-dashboard' | 'compare'>('feed');
+
+  const [profile, setProfile] = useState<any>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitModalDetails, setLimitModalDetails] = useState<{
+    limitType: "vehicle" | "spare_parts" | "business_staff" | "general";
+    currentLimit: number;
+    planName: string;
+    message?: string;
+  }>({
+    limitType: "spare_parts",
+    currentLimit: 1,
+    planName: "Free"
+  });
+
+  // Fetch active user profile on mount
+  useEffect(() => {
+    fetch("/api/profile")
+      .then(res => res.json())
+      .then(data => setProfile(data))
+      .catch(err => console.error("Error fetching profile in ClassifiedsMarketplace:", err));
+  }, []);
+
+  const handleOpenPostModal = (isVehicle: boolean, prefilledCategory?: string) => {
+    const tier = profile?.subscriptionTier || "Free";
+    let limit = 1;
+    if (tier === "Home") {
+      limit = 5;
+    } else if (tier === "Pro" || tier === "Enterprise") {
+      limit = 999;
+    }
+
+    const currentClassifieds = listings.filter(l => l.contactName === "Yeon Pisith" && l.availabilityStatus === 'In Stock');
+    const activeVehiclesPostCount = currentClassifieds.filter(l => (l.postType as any) === 'selling_vehicle').length;
+    const activePartsPostCount = currentClassifieds.filter(l => (l.postType as any) !== 'selling_vehicle').length;
+
+    if (isVehicle && activeVehiclesPostCount >= limit) {
+      setLimitModalDetails({
+        limitType: "vehicle",
+        currentLimit: limit,
+        planName: tier,
+        message: `Your current ${tier} plan is limited to maximum ${limit} active vehicle selling listing(s). Please upgrade your package to post more.`
+      });
+      setShowLimitModal(true);
+      return;
+    }
+
+    if (!isVehicle && activePartsPostCount >= limit) {
+      setLimitModalDetails({
+        limitType: "spare_parts",
+        currentLimit: limit,
+        planName: tier,
+        message: `Your current ${tier} plan is limited to maximum ${limit} active spare part listing(s). Please upgrade your package to post more.`
+      });
+      setShowLimitModal(true);
+      return;
+    }
+
+    setIsVehicleSelling(isVehicle);
+    if (prefilledCategory) {
+      setPostCategory(prefilledCategory);
+    }
+    setShowPostModal(true);
+  };
 
   // Unified Extra states
   const [isVehicleSelling, setIsVehicleSelling] = useState(false);
@@ -128,6 +193,28 @@ export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRe
     const handlePrefill = (e: Event) => {
       const vehicle = (e as CustomEvent).detail;
       if (vehicle) {
+        const tier = profile?.subscriptionTier || "Free";
+        let limit = 1;
+        if (tier === "Home") {
+          limit = 5;
+        } else if (tier === "Pro" || tier === "Enterprise") {
+          limit = 999;
+        }
+
+        const currentClassifieds = listings.filter(l => l.contactName === "Yeon Pisith" && l.availabilityStatus === 'In Stock');
+        const activeVehiclesPostCount = currentClassifieds.filter(l => (l.postType as any) === 'selling_vehicle').length;
+
+        if (activeVehiclesPostCount >= limit) {
+          setLimitModalDetails({
+            limitType: "vehicle",
+            currentLimit: limit,
+            planName: tier,
+            message: `Your current ${tier} plan is limited to maximum ${limit} active vehicle selling listing(s). Please upgrade your package to sell this vehicle.`
+          });
+          setShowLimitModal(true);
+          return;
+        }
+
         setPostTitle(`Selling ${vehicle.year} ${vehicle.brand} ${vehicle.model} - Clean Setup`);
         setPostDescription(`Registered ${vehicle.brand} ${vehicle.model} with ${vehicle.mileage?.toLocaleString() || "82,000"} km logged. Includes verified maintenance logbooks directly inside the Cambodia MyCar platform.`);
         setPostPrice(vehicle.purchasePrice ? String(Math.round(vehicle.purchasePrice * 0.75)) : "17500");
@@ -148,7 +235,7 @@ export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRe
         setWarrantyStatus("12-month Engine Guarantee");
         setInspectionAvailability(true);
         setHealthScore(vehicle.weaknessReport?.score || 94);
-        setSubTab('feed');
+        setSubTab("feed");
         setShowPostModal(true);
       }
     };
@@ -433,6 +520,27 @@ export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRe
         setPostVideos([]);
         onRefreshData();
         fetchListings();
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 403 || errJson.error?.includes("Limit") || errJson.message?.includes("limit") || errJson.message?.includes("Limit")) {
+          setShowPostModal(false);
+          const tier = profile?.subscriptionTier || "Free";
+          let limit = 1;
+          if (tier === "Home") {
+            limit = 5;
+          } else if (tier === "Pro" || tier === "Enterprise") {
+            limit = 999;
+          }
+          setLimitModalDetails({
+            limitType: isVehicleSelling ? "vehicle" : "spare_parts",
+            currentLimit: limit,
+            planName: tier,
+            message: errJson.message || `You have reached the listing limit for your current ${tier} plan. Please upgrade your package to post more listings.`
+          });
+          setShowLimitModal(true);
+        } else {
+          alert(errJson.error || errJson.message || "Failed to create listing.");
+        }
       }
     } catch (err) {
       console.error(err);
@@ -714,9 +822,7 @@ export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRe
 
           <button
             onClick={() => {
-              setIsVehicleSelling(false);
-              setPostCategory("Sell Spare Parts");
-              setShowPostModal(true);
+              handleOpenPostModal(false, "Sell Spare Parts");
             }}
             className="bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition shadow-lg shadow-emerald-500/10 cursor-pointer"
           >
@@ -2439,6 +2545,21 @@ export default function ClassifiedsMarketplace({ vehicles, selectedVehicle, onRe
           </div>
         )}
       </AnimatePresence>
+
+      <PackageLimitReachedModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        onUpgrade={() => {
+          if (onNavigateTab) {
+            onNavigateTab("billing_subscriptions");
+          }
+        }}
+        title="Marketplace Limit Reached"
+        limitType={limitModalDetails.limitType}
+        currentLimit={limitModalDetails.currentLimit}
+        planName={limitModalDetails.planName}
+        message={limitModalDetails.message}
+      />
 
     </div>
   );

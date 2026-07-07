@@ -451,6 +451,10 @@ export default function Dashboard({
   const [editPurchaseDate, setEditPurchaseDate] = useState("");
   const [editPurchasePrice, setEditPurchasePrice] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editIsForSale, setEditIsForSale] = useState(false);
+  const [editSalePrice, setEditSalePrice] = useState("");
+  const [editSaleDescription, setEditSaleDescription] = useState("");
+  const [editMarketplaceStatus, setEditMarketplaceStatus] = useState<'Not Listed' | 'Listed for Sale' | 'Sold'>('Not Listed');
   const [savingVehicle, setSavingVehicle] = useState(false);
 
   // State for Nearby Recommended garages widget
@@ -1717,6 +1721,63 @@ export default function Dashboard({
     fetchConnections();
   }, []);
 
+  // Real-time Multi-user collaborative synchronization (SSE)
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    
+    const connectSSE = () => {
+      console.log("Connecting to Cambodian Garage real-time ticket sync stream...");
+      eventSource = new EventSource("/api/realtime/stream");
+      
+      eventSource.onopen = () => {
+        console.log("Real-time ticket connection successfully established with server.");
+      };
+      
+      eventSource.addEventListener("scan_registered", (e: any) => {
+        console.log("SSE scan_registered received:", e.data);
+        fetchScanHistory();
+      });
+      
+      eventSource.addEventListener("ticket_created", (e: any) => {
+        console.log("SSE ticket_created received:", e.data);
+        fetchPendingRequests();
+      });
+      
+      eventSource.addEventListener("ticket_updated", (e: any) => {
+        console.log("SSE ticket_updated received:", e.data);
+        fetchPendingRequests();
+        if (typeof setVehicles === "function") {
+          fetch("/api/vehicles").then(res => res.json()).then(data => setVehicles(data)).catch(() => {});
+        }
+      });
+      
+      eventSource.addEventListener("partner_request_created", (e: any) => {
+        console.log("SSE partner_request_created received:", e.data);
+        fetchConnections();
+      });
+
+      eventSource.addEventListener("partner_request_updated", (e: any) => {
+        console.log("SSE partner_request_updated received:", e.data);
+        fetchConnections();
+        fetchPendingRequests();
+      });
+
+      eventSource.onerror = (err) => {
+        console.error("SSE connection error, closing stream to allow reconnection:", err);
+        eventSource?.close();
+        setTimeout(connectSSE, 3000);
+      };
+    };
+    
+    connectSSE();
+    
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [selectedVehicle]);
+
   useEffect(() => {
     if (selectedVehicle) {
       fetchReminders();
@@ -1728,6 +1789,10 @@ export default function Dashboard({
       setEditPurchaseDate(selectedVehicle.purchaseDate || "");
       setEditPurchasePrice(selectedVehicle.purchasePrice ? selectedVehicle.purchasePrice.toString() : "");
       setEditNotes(selectedVehicle.notes || "");
+      setEditIsForSale(selectedVehicle.isForSale || false);
+      setEditSalePrice(selectedVehicle.salePrice ? selectedVehicle.salePrice.toString() : "");
+      setEditSaleDescription(selectedVehicle.saleDescription || "");
+      setEditMarketplaceStatus(selectedVehicle.marketplaceStatus || "Not Listed");
       setAiInsights(null); // Clear insights for a fresh fetch experience
 
       // Reset vehicle-specific simulation and telemetry states to prevent cross-contamination
@@ -2160,7 +2225,11 @@ export default function Dashboard({
           vehicleType: editVehicleType,
           purchaseDate: editPurchaseDate,
           purchasePrice: editPurchasePrice ? Number(editPurchasePrice) : null,
-          notes: editNotes
+          notes: editNotes,
+          isForSale: editIsForSale,
+          salePrice: editSalePrice ? Number(editSalePrice) : null,
+          saleDescription: editSaleDescription,
+          marketplaceStatus: editMarketplaceStatus
         })
       });
 
@@ -2944,10 +3013,17 @@ export default function Dashboard({
                     <DollarSign className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
                     <span className="text-[10px] font-bold">Add Expense</span>
                   </button>
-                  <button onClick={() => { setActiveSubTab('expenses'); setShowAddExpensePanel(true); setExpCategory('Fuel'); }} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
-                    <FlameKindling className="w-5 h-5 text-amber-500 group-hover:scale-110 transition" />
-                    <span className="text-[10px] font-bold">Add Fuel Log</span>
-                  </button>
+                  {selectedVehicle && isPureEV(selectedVehicle) ? (
+                    <button onClick={() => { setActiveSubTab('expenses'); setShowAddExpensePanel(true); setExpCategory('Other'); }} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
+                      <Zap className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
+                      <span className="text-[10px] font-bold">Add Charge Log</span>
+                    </button>
+                  ) : (
+                    <button onClick={() => { setActiveSubTab('expenses'); setShowAddExpensePanel(true); setExpCategory('Fuel'); }} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
+                      <FlameKindling className="w-5 h-5 text-amber-500 group-hover:scale-110 transition" />
+                      <span className="text-[10px] font-bold">Add Fuel Log</span>
+                    </button>
+                  )}
                   <button onClick={onAddRecord} className="p-3 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-xl space-y-1.5 text-center flex flex-col items-center justify-center transition group">
                     <Wrench className="w-5 h-5 text-blue-400 group-hover:scale-110 transition" />
                     <span className="text-[10px] font-bold">Log Maintenance</span>
@@ -4778,6 +4854,63 @@ export default function Dashboard({
                                     className="w-full h-16 bg-slate-950/80 border border-white/10 p-2.5 rounded-xl text-slate-100 resize-none text-xs"
                                   ></textarea>
                                 </div>
+
+                                <div className="border-t border-white/10 pt-3 space-y-3">
+                                  <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Marketplace Listing (SaaS Monetization MVP)</h4>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      id="editIsForSale"
+                                      checked={editIsForSale}
+                                      onChange={(e) => {
+                                        setEditIsForSale(e.target.checked);
+                                        if (e.target.checked) setEditMarketplaceStatus('Listed for Sale');
+                                        else setEditMarketplaceStatus('Not Listed');
+                                      }}
+                                      className="w-4 h-4 rounded bg-slate-950 border-white/10 text-sky-500 focus:ring-sky-500 cursor-pointer"
+                                    />
+                                    <label htmlFor="editIsForSale" className="text-[11px] font-bold text-slate-300 cursor-pointer">
+                                      List this vehicle for sale in Marketplace
+                                    </label>
+                                  </div>
+
+                                  {editIsForSale && (
+                                    <div className="space-y-2.5">
+                                      <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] font-bold text-slate-400 uppercase">Target Sale Price (USD)</label>
+                                          <input
+                                            type="number"
+                                            value={editSalePrice}
+                                            onChange={(e) => setEditSalePrice(e.target.value)}
+                                            placeholder="e.g. 15500"
+                                            className="w-full bg-slate-950/80 border border-white/10 p-2.5 rounded-xl text-slate-100 font-mono text-xs"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <label className="text-[10px] font-bold text-slate-400 uppercase">Marketplace Status</label>
+                                          <select
+                                            value={editMarketplaceStatus}
+                                            onChange={(e) => setEditMarketplaceStatus(e.target.value as any)}
+                                            className="w-full bg-slate-950/80 border border-white/10 p-2.5 rounded-xl text-slate-100 text-xs"
+                                          >
+                                            <option value="Listed for Sale">Listed for Sale</option>
+                                            <option value="Sold">Sold</option>
+                                          </select>
+                                        </div>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase">Listing Description / Ad Copy</label>
+                                        <textarea
+                                          value={editSaleDescription}
+                                          onChange={(e) => setEditSaleDescription(e.target.value)}
+                                          placeholder="Provide condition, upgrades, and pedigree for Cambodian buyers..."
+                                          className="w-full h-16 bg-slate-950/80 border border-white/10 p-2.5 rounded-xl text-slate-100 resize-none text-xs"
+                                        ></textarea>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                                 <button
                                   type="submit"
                                   disabled={savingVehicle}
@@ -4829,11 +4962,38 @@ export default function Dashboard({
                                   </div>
                                 )}
                                 {selectedVehicle.purchasePrice && (
-                                  <div className="flex justify-between py-1.5">
+                                  <div className="flex justify-between py-1.5 border-b border-white/5">
                                     <span className="text-slate-500 font-medium font-mono">Declared Asset Value</span>
                                     <span className="font-bold text-emerald-400 font-mono">${selectedVehicle.purchasePrice.toLocaleString()} USD</span>
                                   </div>
                                 )}
+                                <div className="pt-2 border-t border-white/5">
+                                  <div className="flex justify-between py-1">
+                                    <span className="text-slate-500 font-medium">Marketplace Listing Status</span>
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                      selectedVehicle.isForSale
+                                        ? selectedVehicle.marketplaceStatus === 'Sold'
+                                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                          : 'bg-sky-500/10 text-sky-400 border border-sky-500/20 animate-pulse'
+                                        : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                                    }`}>
+                                      {selectedVehicle.isForSale ? selectedVehicle.marketplaceStatus || 'Listed for Sale' : 'Not Listed'}
+                                    </span>
+                                  </div>
+                                  {selectedVehicle.isForSale && (
+                                    <>
+                                      <div className="flex justify-between py-1 font-mono text-xs mt-1">
+                                        <span className="text-slate-500">Asking Ad Price</span>
+                                        <span className="font-bold text-emerald-400">${selectedVehicle.salePrice?.toLocaleString() || "N/A"} USD</span>
+                                      </div>
+                                      {selectedVehicle.saleDescription && (
+                                        <div className="mt-1 p-2 bg-slate-950/40 rounded-xl border border-white/5 text-[11px] text-slate-400 leading-relaxed italic">
+                                          "{selectedVehicle.saleDescription}"
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>

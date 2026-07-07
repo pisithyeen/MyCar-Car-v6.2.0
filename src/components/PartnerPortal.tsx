@@ -131,6 +131,58 @@ export default function PartnerPortal({
     fetchPrivacyAndPending();
   }, [selectedVehicle]);
 
+  // Real-time Multi-user collaborative synchronization (SSE) for Garage Portal
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    
+    const connectSSE = () => {
+      console.log("Partner Portal: Connecting to real-time sync stream...");
+      eventSource = new EventSource("/api/realtime/stream");
+      
+      eventSource.onopen = () => {
+        console.log("Partner Portal: Real-time sync stream active.");
+      };
+      
+      eventSource.addEventListener("partner_request_updated", (e: any) => {
+        console.log("Partner Portal: partner_request_updated:", e.data);
+        fetchPrivacyAndPending();
+        if (typeof onRefreshData === "function") {
+          onRefreshData();
+        }
+      });
+      
+      eventSource.addEventListener("ticket_updated", (e: any) => {
+        console.log("Partner Portal: ticket_updated:", e.data);
+        fetchPrivacyAndPending();
+        if (typeof onRefreshData === "function") {
+          onRefreshData();
+        }
+      });
+      
+      eventSource.addEventListener("ticket_created", (e: any) => {
+        console.log("Partner Portal: ticket_created:", e.data);
+        fetchPrivacyAndPending();
+        if (typeof onRefreshData === "function") {
+          onRefreshData();
+        }
+      });
+
+      eventSource.onerror = (err) => {
+        console.error("Partner Portal: SSE error, reconnecting...", err);
+        eventSource?.close();
+        setTimeout(connectSSE, 3000);
+      };
+    };
+    
+    connectSSE();
+    
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
+  }, [selectedVehicle, onRefreshData]);
+
   // Set default printing vehicle on vehicles change
   useEffect(() => {
     if (vehicles && vehicles.length > 0 && !selectedPrintVehicleId) {

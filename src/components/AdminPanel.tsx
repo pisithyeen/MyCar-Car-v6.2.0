@@ -64,6 +64,12 @@ interface UserAccount {
   status: 'Pending' | 'Approved' | 'Suspended';
   businessName?: string;
   licenseNumber?: string;
+  businessSubscription?: {
+    planType: string;
+    isVerified: boolean;
+    featuredListing: boolean;
+    staffLimit: number;
+  };
 }
 
 interface AuditLogEntry {
@@ -114,6 +120,8 @@ export default function AdminPanel({
   const [editStatus, setEditStatus] = useState<'Pending' | 'Approved' | 'Suspended'>('Approved');
   const [editBusinessName, setEditBusinessName] = useState("");
   const [editLicenseNumber, setEditLicenseNumber] = useState("");
+  const [editIsVerified, setEditIsVerified] = useState(false);
+  const [editFeaturedListing, setEditFeaturedListing] = useState(false);
 
   // Direct custom notification controls
   const [customNotifyMessage, setCustomNotifyMessage] = useState("");
@@ -312,7 +320,9 @@ export default function AdminPanel({
           role: editRole,
           status: editStatus,
           businessName: editBusinessName || null,
-          licenseNumber: editLicenseNumber || null
+          licenseNumber: editLicenseNumber || null,
+          isVerified: editIsVerified,
+          featuredListing: editFeaturedListing
         })
       });
 
@@ -332,7 +342,13 @@ export default function AdminPanel({
           role: editRole,
           status: editStatus,
           businessName: editBusinessName || undefined,
-          licenseNumber: editLicenseNumber || undefined
+          licenseNumber: editLicenseNumber || undefined,
+          businessSubscription: {
+            planType: selectedUser.businessSubscription?.planType || "Free",
+            isVerified: editIsVerified,
+            featuredListing: editFeaturedListing,
+            staffLimit: selectedUser.businessSubscription?.staffLimit || 1
+          }
         };
         setSelectedUser(updatedUser);
       } else {
@@ -519,6 +535,8 @@ export default function AdminPanel({
     setEditStatus(user.status || 'Approved');
     setEditBusinessName(user.businessName || "");
     setEditLicenseNumber(user.licenseNumber || "");
+    setEditIsVerified(user.businessSubscription?.isVerified || false);
+    setEditFeaturedListing(user.businessSubscription?.featuredListing || false);
   };
 
   // Toggle capabilities in custom RBAC grid
@@ -1198,28 +1216,54 @@ export default function AdminPanel({
                           </div>
 
                           {(editRole !== "Vehicle Owner" && editRole !== "Admin") && (
-                            <div className="grid grid-cols-2 gap-2 p-2 bg-slate-900 rounded-lg">
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-400">Business Name</label>
-                                <input 
-                                  type="text" 
-                                  value={editBusinessName}
-                                  onChange={(e) => setEditBusinessName(e.target.value)}
-                                  placeholder="e.g. TotalEnergies PP"
-                                  className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white"
-                                />
+                            <>
+                              <div className="grid grid-cols-2 gap-2 p-2 bg-slate-900 rounded-lg">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] uppercase font-bold text-slate-400">Business Name</label>
+                                  <input 
+                                    type="text" 
+                                    value={editBusinessName}
+                                    onChange={(e) => setEditBusinessName(e.target.value)}
+                                    placeholder="e.g. TotalEnergies PP"
+                                    className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] uppercase font-bold text-slate-400">License ID</label>
+                                  <input 
+                                    type="text" 
+                                    value={editLicenseNumber}
+                                    onChange={(e) => setEditLicenseNumber(e.target.value)}
+                                    placeholder="e.g. Co-9213/2026-KH"
+                                    className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white"
+                                  />
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-slate-400">License ID</label>
-                                <input 
-                                  type="text" 
-                                  value={editLicenseNumber}
-                                  onChange={(e) => setEditLicenseNumber(e.target.value)}
-                                  placeholder="e.g. Co-9213/2026-KH"
-                                  className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white"
-                                />
+
+                              <div className="p-2.5 bg-slate-900 border border-slate-850 rounded-lg space-y-2 mt-1">
+                                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">🛡 Business Subscription Options</span>
+                                <div className="flex gap-4">
+                                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={editIsVerified}
+                                      onChange={(e) => setEditIsVerified(e.target.checked)}
+                                      className="rounded border-slate-800 bg-slate-950 text-emerald-500 focus:ring-0 w-4 h-4 cursor-pointer"
+                                    />
+                                    <span className="text-xs text-slate-200">Is Verified</span>
+                                  </label>
+                                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={editFeaturedListing}
+                                      onChange={(e) => setEditFeaturedListing(e.target.checked)}
+                                      className="rounded border-slate-800 bg-slate-950 text-indigo-500 focus:ring-0 w-4 h-4 cursor-pointer"
+                                    />
+                                    <span className="text-xs text-slate-200">Featured Listing</span>
+                                  </label>
+                                </div>
                               </div>
-                            </div>
+                            </>
                           )}
                         </div>
 
@@ -1262,11 +1306,67 @@ export default function AdminPanel({
                             <span className="text-slate-200 font-bold">{selectedUser.role}</span>
                           </div>
                           {selectedUser.businessName && (
-                            <div className="p-2 bg-slate-900 border border-slate-850/65 rounded-xl space-y-1 mt-1 text-[11px]">
+                            <div className="p-2 bg-slate-900 border border-slate-850/65 rounded-xl space-y-1.5 mt-1 text-[11px]">
                               <p className="font-bold text-emerald-400 font-sans">Registered Entity Metadata:</p>
                               <p className="text-slate-300">Name: <strong className="text-white">{selectedUser.businessName}</strong></p>
                               {selectedUser.licenseNumber && (
                                 <p className="text-slate-300 font-mono">License Reg: <strong className="text-amber-400">{selectedUser.licenseNumber}</strong></p>
+                              )}
+
+                              {selectedUser.businessSubscription && (
+                                <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 text-[11px]">
+                                  <p className="font-bold text-amber-400 font-mono text-[10px] uppercase tracking-wider">Business Subscription:</p>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">Plan Tier:</span>
+                                    <span className="text-slate-200 font-semibold">{selectedUser.businessSubscription.planType}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">Verification Status:</span>
+                                    <span className={selectedUser.businessSubscription.isVerified ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                                      {selectedUser.businessSubscription.isVerified ? "✓ Verified Badge" : "✗ Unverified"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">Featured Listing:</span>
+                                    <span className={selectedUser.businessSubscription.featuredListing ? "text-indigo-400 font-semibold" : "text-slate-500"}>
+                                      {selectedUser.businessSubscription.featuredListing ? "✓ Enabled" : "✗ Disabled"}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-slate-400">Staff Limit:</span>
+                                    <span className="text-slate-200">{selectedUser.businessSubscription.staffLimit} member(s)</span>
+                                  </div>
+
+                                  {selectedUser.role === "Garage Owner" && (selectedUser.businessSubscription as any).diagnosticBays !== undefined && (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Diagnostic Bays:</span>
+                                        <span className="text-emerald-400 font-mono">{(selectedUser.businessSubscription as any).diagnosticBays} bays</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Equipment Verified:</span>
+                                        <span className={(selectedUser.businessSubscription as any).hasEquipmentVerification ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                                          {(selectedUser.businessSubscription as any).hasEquipmentVerification ? "✓ Certified Active" : "✗ Pending Check"}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {selectedUser.role === "Spare Part Shop" && (selectedUser.businessSubscription as any).partsCountLimit !== undefined && (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Parts Stock Limit:</span>
+                                        <span className="text-indigo-400 font-mono">{(selectedUser.businessSubscription as any).partsCountLimit} items</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">eCommerce Platform:</span>
+                                        <span className={(selectedUser.businessSubscription as any).eCommerceEnabled ? "text-indigo-400 font-semibold" : "text-slate-500"}>
+                                          {(selectedUser.businessSubscription as any).eCommerceEnabled ? "✓ Active Store" : "✗ Catalog Only"}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}

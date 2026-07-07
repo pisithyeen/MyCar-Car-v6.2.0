@@ -36,7 +36,9 @@ import {
   Bell,
   CheckCircle2,
   Trash2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Mic,
+  MicOff
 } from "lucide-react";
 import { VehicleProfile, MaintenanceRecord } from "../types";
 
@@ -94,6 +96,93 @@ export const QuickServiceLogSystem: React.FC<QuickServiceLogProps> = ({
   const [chassisNum, setChassisNum] = useState("");
   const [clientComplaint, setClientComplaint] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Engine Oil Change");
+
+  // Hands-free Voice-to-Text Input States
+  const [isListening, setIsListening] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setIsSpeechSupported(true);
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = "en-US";
+
+      rec.onstart = () => {
+        setIsListening(true);
+        setSpeechError(null);
+      };
+
+      rec.onresult = (event: any) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        if (finalTranscript) {
+          setClientComplaint((prev) => {
+            const trimmed = prev.trim();
+            return trimmed ? `${trimmed} ${finalTranscript.trim()}` : finalTranscript.trim();
+          });
+        }
+      };
+
+      rec.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error === "not-allowed") {
+          setSpeechError("Microphone permission denied.");
+        } else if (event.error === "no-speech") {
+          // Silent warning
+        } else {
+          setSpeechError(`Speech error: ${event.error}`);
+        }
+        setIsListening(false);
+      };
+
+      rec.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = rec;
+    }
+
+    return () => {
+      if (recognitionRef.current && isListening) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  // Stop listening when modal closes
+  useEffect(() => {
+    if (!isModalOpen && recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+    }
+  }, [isModalOpen, isListening]);
+
+  const toggleListening = () => {
+    if (!isSpeechSupported || !recognitionRef.current) {
+      setSpeechError("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      try {
+        setSpeechError(null);
+        recognitionRef.current.start();
+      } catch (e) {
+        console.error("Failed to start speech recognition:", e);
+        setIsListening(false);
+      }
+    }
+  };
   
   // Costs
   const [diagnosticFee, setDiagnosticFee] = useState("15");
@@ -1307,7 +1396,44 @@ export const QuickServiceLogSystem: React.FC<QuickServiceLogProps> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] text-slate-400 font-bold block uppercase">Technician Note / Customer Complaint</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] text-slate-400 font-bold block uppercase">Technician Note / Customer Complaint</label>
+                        {isSpeechSupported && (
+                          <button
+                            type="button"
+                            onClick={toggleListening}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold transition-all duration-300 border cursor-pointer select-none ${
+                              isListening
+                                ? "bg-red-500/15 text-red-400 border-red-500/40 animate-pulse"
+                                : "bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:border-slate-700"
+                            }`}
+                            title="Hands-free voice note dictation"
+                          >
+                            {isListening ? (
+                              <>
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+                                </span>
+                                <span>Listening...</span>
+                                <MicOff className="w-3 h-3 text-red-400" />
+                              </>
+                            ) : (
+                              <>
+                                <Mic className="w-3 h-3 text-emerald-400 animate-bounce" />
+                                <span>Hands-free Dictate</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+
+                      {speechError && (
+                        <p className="text-[10px] text-rose-400 font-mono bg-rose-950/10 border border-rose-900/20 px-2 py-1 rounded-lg">
+                          ⚠️ {speechError}
+                        </p>
+                      )}
+
                       <textarea
                         rows={3}
                         value={clientComplaint}

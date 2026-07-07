@@ -34,7 +34,8 @@ import {
   Coins,
   Layers,
   Globe,
-  Menu
+  Menu,
+  CreditCard
 } from "lucide-react";
 import { UserProfile, VehicleProfile, MaintenanceRecord, GaragePartner } from "./types";
 import Dashboard from "./components/Dashboard";
@@ -51,6 +52,7 @@ import AIDreamCarAdvisor from "./components/AIDreamCarAdvisor";
 import { QuickServiceLogSystem } from "./components/QuickServiceLogSystem";
 import { VehicleRegistrationSystem } from "./components/VehicleRegistrationSystem";
 import RoleBasedFormSystem from "./components/RoleBasedFormSystem";
+import BillingAndSubscriptionSystem from "./components/BillingAndSubscriptionSystem";
 
 import LoginScreen from "./components/LoginScreen";
 import GarageDashboard from "./components/GarageDashboard";
@@ -283,6 +285,7 @@ export default function App() {
   // Loading states
   const [appLoading, setAppLoading] = useState(true);
   const [addVehicleLoading, setAddVehicleLoading] = useState(false);
+  const [addVehicleError, setAddVehicleError] = useState<string | null>(null);
 
   // Offline connectivity states
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
@@ -321,6 +324,9 @@ export default function App() {
   const [vFuel, setVFuel] = useState<'Gasoline' | 'Diesel' | 'EV' | 'Hybrid'>("Hybrid");
   const [vLastOil, setVLastOil] = useState("");
   const [vLastDate, setVLastDate] = useState("");
+  const [vPlateNumber, setVPlateNumber] = useState("PP-2AX-9988");
+  const [vVehicleType, setVVehicleType] = useState<'Sedan' | 'SUV' | 'Pickup' | 'Van' | 'Moto' | 'Truck' | 'Hatchback' | 'Other'>("Sedan");
+  const [vChassisNumber, setVChassisNumber] = useState("");
 
   // Form states: New Service log Group
   const [sCategory, setSCategory] = useState("Engine Oil Service");
@@ -508,6 +514,7 @@ export default function App() {
     if (!vBrand || !vModel || !vYear || !vMileage) return;
 
     setAddVehicleLoading(true);
+    setAddVehicleError(null);
     try {
       const response = await fetch("/api/vehicles", {
         method: "POST",
@@ -521,11 +528,15 @@ export default function App() {
           mileage: Number(vMileage),
           fuelType: vFuel,
           lastOilChangeMileage: vLastOil ? Number(vLastOil) : null,
-          lastServiceDate: vLastDate || null
+          lastServiceDate: vLastDate || null,
+          plateNumber: vPlateNumber,
+          vehicleType: vVehicleType,
+          chassisNumber: vChassisNumber
         })
       });
 
       if (response.ok) {
+        setAddVehicleError(null);
         const newVehicle: VehicleProfile = await response.json();
         setVehicles(prev => [...prev, newVehicle]);
         setSelectedVehicle(newVehicle);
@@ -542,9 +553,16 @@ export default function App() {
         setVFuel("Hybrid");
         setVLastOil("");
         setVLastDate("");
+        setVPlateNumber("PP-2AX-9988");
+        setVVehicleType("Sedan");
+        setVChassisNumber("");
+      } else {
+        const errData = await response.json();
+        setAddVehicleError(errData.message || errData.error || "Failed to register vehicle profile. Upgrade your package.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      setAddVehicleError("Network error occurred while registering your vehicle.");
     } finally {
       setAddVehicleLoading(false);
     }
@@ -1087,6 +1105,7 @@ export default function App() {
     return [
       { id: "role_forms", label: "Unified Form System", icon: <Sliders className="w-4 h-4 text-sky-400 animate-pulse" /> },
       ...baseItems,
+      { id: "billing_subscriptions", label: "Billing & Plans", icon: <CreditCard className="w-4 h-4 text-emerald-400 animate-pulse" /> },
       { id: "fix_my_car_bidding", label: "Fix My Car Requests", icon: <Wrench className="w-4 h-4 text-emerald-450 text-emerald-400 animate-pulse" /> },
       { id: "coins", label: "Care Coin Donation & Rewards", icon: <Coins className="w-4 h-4 text-amber-400 animate-pulse" /> },
       { id: "vehicle_powertrains", label: "My Vehicle", icon: <Sliders className="w-4 h-4 text-pink-450 text-pink-400 animate-pulse" /> },
@@ -1737,6 +1756,7 @@ export default function App() {
                   vehicles={vehicles}
                   selectedVehicle={selectedVehicle}
                   onRefreshData={handleRefreshAllDataFromServer}
+                  onNavigateTab={(tabName) => setActiveTab(tabName)}
                 />
               )}
 
@@ -1749,11 +1769,20 @@ export default function App() {
                 />
               )}
 
+              {activeTab === 'billing_subscriptions' && userProfile && (
+                <BillingAndSubscriptionSystem
+                  userProfile={userProfile}
+                  vehicles={vehicles}
+                  onRefreshData={handleRefreshAllDataFromServer}
+                />
+              )}
+
               {activeTab === 'vehicle_powertrains' && (
                 <VehicleRegistrationSystem
                   vehicles={vehicles}
                   records={records}
                   onRefreshData={handleRefreshAllDataFromServer}
+                  onNavigateTab={(tabName) => setActiveTab(tabName)}
                 />
               )}
 
@@ -1808,6 +1837,26 @@ export default function App() {
                 <X className="w-5 h-5 cursor-pointer" />
               </button>
             </div>
+
+            {addVehicleError && (
+              <div className="bg-rose-500/10 border border-rose-500/25 p-3.5 rounded-xl text-xs space-y-2">
+                <p className="text-rose-400 font-bold flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 animate-pulse" />
+                  <span>Limit Reached</span>
+                </p>
+                <p className="text-rose-300/90 leading-relaxed">{addVehicleError}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddVehicleModal(false);
+                    setActiveTab("billing_subscriptions");
+                  }}
+                  className="w-full py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[11px] rounded-lg transition cursor-pointer"
+                >
+                  Manage Subscription Package
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleAddNewVehicle} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
@@ -1877,6 +1926,42 @@ export default function App() {
                   required
                   placeholder="e.g., 180000"
                   className="w-full bg-white/5 border border-white/10 p-2.5 px-3 text-xs rounded-xl focus:outline-none focus:border-white/20 text-slate-100 font-mono"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Cambodian Plate Registration</label>
+                  <input
+                    type="text"
+                    value={vPlateNumber}
+                    onChange={(e) => setVPlateNumber(e.target.value)}
+                    placeholder="e.g. PP-2AX-9988"
+                    className="w-full bg-white/5 border border-white/10 p-2.5 px-3 text-xs rounded-xl focus:outline-none focus:border-white/20 text-slate-100 font-mono text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase">Vehicle Type Style</label>
+                  <select
+                    value={vVehicleType}
+                    onChange={(e) => setVVehicleType(e.target.value as any)}
+                    className="w-full bg-slate-900 border border-white/10 p-2 px-3 text-xs rounded-xl focus:outline-none focus:border-white/20 text-slate-100"
+                  >
+                    {['Sedan', 'SUV', 'Pickup', 'Van', 'Moto', 'Truck', 'Hatchback', 'Other'].map(vTyp => (
+                      <option key={vTyp} value={vTyp} className="bg-slate-900">{vTyp}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">Chassis Serial Number</label>
+                <input
+                  type="text"
+                  value={vChassisNumber}
+                  onChange={(e) => setVChassisNumber(e.target.value)}
+                  placeholder="e.g. JTDKN3DPXCXXXXXXX"
+                  className="w-full bg-white/5 border border-white/10 p-2.5 px-3 text-xs rounded-xl focus:outline-none focus:border-white/20 text-slate-100 font-mono uppercase text-xs"
                 />
               </div>
 

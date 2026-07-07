@@ -12,6 +12,17 @@ export const users = pgTable('users', {
   status: text('status').default('Approved'), // 'Pending' | 'Approved' | 'Suspended'
   businessName: text('business_name'),
   licenseNumber: text('license_number'),
+  
+  // Subscription parameters for MyCar Care KH MVP
+  subscriptionTier: text('subscription_tier').default('Free'), // 'Free' | 'Home' | 'Pro' | 'Enterprise'
+  subscriptionStatus: text('subscription_status').default('active'), // 'active' | 'canceled' | 'past_due'
+  subscriptionExpiry: text('subscription_expiry').default(''), // YYYY-MM-DD
+  aiUsageCount: integer('ai_usage_count').default(0),
+  aiUsageLimit: integer('ai_usage_limit').default(3),
+  businessSubscriptionTier: text('business_subscription_tier').default('None'), // 'None', 'Garage_Basic', 'Garage_Pro', 'Shop_Basic', 'Shop_Pro' etc.
+  verifiedBadge: boolean('verified_badge').default(false),
+  boostCredits: integer('boost_credits').default(0),
+
   createdAt: timestamp('created_at').defaultNow()
 });
 
@@ -517,3 +528,20 @@ export const fleetSubscriptionPlans = pgTable('fleet_subscription_plans', {
   features: text('features'), // CSV or text
   createdAt: timestamp('created_at').defaultNow()
 });
+
+// 36. QR Sticker & Metal Plate Orders Table
+export const qrStickerOrders = pgTable('qr_sticker_orders', {
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
+  vehicleId: text('vehicle_id').references(() => vehicles.id, { onDelete: 'cascade' }).notNull(),
+  stickerType: text('sticker_type').notNull(), // 'Standard QR Decal', 'Reflective Vinyl', 'Retro Metal Plate'
+  quantity: integer('quantity').notNull(),
+  phone: text('phone').notNull(),
+  deliveryAddress: text('delivery_address').notNull(),
+  deliveryFee: integer('delivery_fee').notNull(), // in USD
+  totalCost: integer('total_cost').notNull(), // in USD
+  paymentStatus: text('payment_status').default('Pending'), // 'Pending' | 'Paid'
+  status: text('status').default('Ordered'), // 'Ordered' | 'Shipped' | 'Delivered'
+  createdAt: timestamp('created_at').defaultNow()
+});
+
