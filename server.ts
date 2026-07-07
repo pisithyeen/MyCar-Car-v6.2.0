@@ -2551,6 +2551,19 @@ app.get("/api/qr-tokens", (req: Request, res: Response) => {
 // Server-Sent Events (SSE) Client registry for Real-time Multi-user updates
 let sseClients: any[] = [];
 
+// Send keep-alive comments every 15 seconds to prevent gateway timeouts (e.g. Nginx, Cloud Run)
+if (typeof global !== 'undefined') {
+  setInterval(() => {
+    sseClients.forEach(client => {
+      try {
+        client.res.write(": heartbeat keepalive\n\n");
+      } catch (err) {
+        // connection closed
+      }
+    });
+  }, 15000);
+}
+
 app.get("/api/realtime/stream", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -3736,7 +3749,7 @@ app.post("/api/admin/users/:id/status", (req: Request, res: Response) => {
 // Admin: full user profile updates
 app.put("/api/admin/users/:id", (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, email, phone, role, location, status, businessName, licenseNumber, isVerified, featuredListing } = req.body;
+  const { name, email, phone, role, location, status, businessName, licenseNumber, isVerified, featuredListing, subscriptionTier, subscriptionStatus, subscriptionExpiry, businessSubscriptionTier, boostCredits } = req.body;
 
   const idx = simulatedUsersDatabase.findIndex(u => u.id === Number(id));
   if (idx === -1) {
@@ -3745,10 +3758,8 @@ app.put("/api/admin/users/:id", (req: Request, res: Response) => {
 
   const oldUser = { ...simulatedUsersDatabase[idx] };
 
-  let currentSub = simulatedUsersDatabase[idx].businessSubscription;
-  if (!currentSub) {
-    currentSub = getBusinessSubscription(simulatedUsersDatabase[idx].businessSubscriptionTier, role || oldUser.role);
-  }
+  const targetBizTier = businessSubscriptionTier !== undefined ? businessSubscriptionTier : oldUser.businessSubscriptionTier;
+  let currentSub = getBusinessSubscription(targetBizTier, role || oldUser.role);
 
   if (currentSub) {
     if (isVerified !== undefined) currentSub.isVerified = isVerified;
@@ -3765,6 +3776,11 @@ app.put("/api/admin/users/:id", (req: Request, res: Response) => {
     status: status || oldUser.status,
     businessName: businessName !== undefined ? businessName : oldUser.businessName,
     licenseNumber: licenseNumber !== undefined ? licenseNumber : oldUser.licenseNumber,
+    subscriptionTier: subscriptionTier !== undefined ? subscriptionTier : oldUser.subscriptionTier,
+    businessSubscriptionTier: targetBizTier,
+    subscriptionStatus: subscriptionStatus !== undefined ? subscriptionStatus : oldUser.subscriptionStatus,
+    subscriptionExpiry: subscriptionExpiry !== undefined ? subscriptionExpiry : oldUser.subscriptionExpiry,
+    boostCredits: boostCredits !== undefined ? boostCredits : oldUser.boostCredits,
     businessSubscription: currentSub
   };
 
@@ -3970,8 +3986,9 @@ app.post("/api/vehicles", async (req: Request, res: Response) => {
   }
 
   // Subscription registration limit enforcement
-  const tier = activeProfile?.subscriptionTier || "Free";
-  const limit = tier === "Free" ? 2 : tier === "Home" ? 5 : tier === "Pro" ? 30 : 999999;
+  const sub = getUserSubscription(activeProfile);
+  const tier = sub?.planType || "Free";
+  const limit = sub?.vehicleLimit || 2;
   const currentCount = vehicles.filter(v => v.owner === activeProfile?.name || v.owner === "Yeon Pisith" || v.id.startsWith('v')).length;
   
   if (currentCount >= limit) {
@@ -6638,17 +6655,10 @@ app.post("/api/classifieds/listings", async (req: Request, res: Response) => {
 
   // Marketplace subscription limit enforcement
   const isVehiclePost = (postType as any) === 'selling_vehicle';
-  const tier = activeProfile?.subscriptionTier || "Free";
-  let vehicleLimit = 1;
-  let partLimit = 1;
-
-  if (tier === "Home") {
-    vehicleLimit = 5;
-    partLimit = 5;
-  } else if (tier === "Pro" || tier === "Enterprise") {
-    vehicleLimit = 999;
-    partLimit = 999;
-  }
+  const sub = getUserSubscription(activeProfile);
+  const tier = sub?.planType || "Free";
+  const vehicleLimit = sub?.postLimit || 1;
+  const partLimit = sub?.postLimit || 1;
 
   const currentClassifieds = classifiedListingsDatabase.filter(l => l.contactName === activeProfile?.name && l.availabilityStatus === 'In Stock');
   const activeVehiclesPostCount = currentClassifieds.filter(l => (l.postType as any) === 'selling_vehicle').length;

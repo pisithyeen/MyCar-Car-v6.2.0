@@ -545,3 +545,111 @@ export const qrStickerOrders = pgTable('qr_sticker_orders', {
   createdAt: timestamp('created_at').defaultNow()
 });
 
+// 37. Subscription Plans Table
+export const subscriptionPlans = pgTable('subscription_plans', {
+  id: text('id').primaryKey(), // 'Free' | 'Home' | 'Pro' | 'Enterprise'
+  name: text('name').notNull(),
+  priceMonthly: integer('price_monthly').notNull(), // in USD
+  priceYearly: integer('price_yearly').notNull(), // in USD
+  vehicleLimit: integer('vehicle_limit').notNull(),
+  staffLimit: integer('staff_limit').notNull(),
+  postLimit: integer('post_limit').notNull(),
+  aiLimit: integer('ai_limit').notNull(),
+  storageLimitMb: integer('storage_limit_mb').default(50),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 38. User Subscriptions Table
+export const userSubscriptions = pgTable('user_subscriptions', {
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
+  planId: text('plan_id').notNull(),
+  status: text('status').notNull(), // 'active' | 'expired' | 'cancelled' | 'trial'
+  startDate: text('start_date').notNull(), // YYYY-MM-DD
+  endDate: text('end_date').notNull(), // YYYY-MM-DD
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 39. Business Subscriptions Table
+export const businessSubscriptions = pgTable('business_subscriptions', {
+  id: text('id').primaryKey(),
+  businessId: text('business_id').notNull(), // ID of the business profile
+  businessType: text('business_type').notNull(), // 'garage' | 'spare_parts_shop' | 'petrol_station' | 'ev_station' | 'mechanic'
+  planId: text('plan_id').notNull(), // e.g. 'Garage_Starter' | 'Garage_Pro'
+  branchLimit: integer('branch_limit').default(1),
+  staffLimit: integer('staff_limit').default(5),
+  status: text('status').notNull(), // 'active' | 'expired' | 'cancelled' | 'trial'
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date').notNull(),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 40. Feature Limits Table
+export const featureLimits = pgTable('feature_limits', {
+  id: serial('id').primaryKey(),
+  role: text('role').notNull(),
+  featureKey: text('feature_key').notNull(), // e.g. 'fleet_tools', 'telegram_notif'
+  allowed: boolean('allowed').default(false),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 41. Marketplace Fees Table
+export const marketplaceFees = pgTable('marketplace_fees', {
+  id: serial('id').primaryKey(),
+  feeName: text('fee_name').notNull(), // e.g. 'extra_post_fee', 'boost_fee', 'delivery_coord_fee'
+  amount: integer('amount').notNull(), // in USD
+  percentage: real('percentage').default(0.0), // e.g. 5%
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 42. Boost Packages Table
+export const boostPackagesTable = pgTable('boost_packages', {
+  id: text('id').primaryKey(),
+  boostName: text('boost_name').notNull(),
+  durationDays: integer('duration_days').notNull(),
+  price: integer('price').notNull(), // in USD
+  placementType: text('placement_type').notNull(), // 'homepage' | 'marketplace_top' | 'map_pin' | 'search_top'
+  targetType: text('target_type').notNull(), // 'vehicle' | 'spare_part' | 'garage' | 'shop' | 'mechanic'
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 43. AI Report Purchases Table
+export const aiReportPurchases = pgTable('ai_report_purchases', {
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
+  vehicleId: text('vehicle_id').notNull(),
+  reportType: text('report_type').notNull(), // 'weakness_report' | 'resale_readiness' | 'loan_affordability' | 'dream_car'
+  pricePaid: integer('price_paid').notNull(), // in USD
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 44. Payment Transactions Table
+export const paymentTransactions = pgTable('payment_transactions', {
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
+  amount: integer('amount').notNull(), // USD
+  paymentMethod: text('payment_method').notNull(), // 'ABA Pay' | 'KHQR' | 'CareCoins'
+  status: text('status').notNull(), // 'pending' | 'completed' | 'failed'
+  purpose: text('purpose').notNull(), // e.g. 'Upgrade Home', 'Sticker Order', 'Boost Post'
+  promoCodeUsed: text('promo_code_used'),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 45. Promo Codes Table
+export const promoCodes = pgTable('promo_codes', {
+  id: text('id').primaryKey(), // e.g. 'ABA2026', 'KHNEWYEAR'
+  discountPercentage: integer('discount_percentage').notNull(),
+  validUntil: text('valid_until').notNull(), // YYYY-MM-DD
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// 46. Wallet Balances Table
+export const walletBalances = pgTable('wallet_balances', {
+  id: text('id').primaryKey(),
+  userUid: text('user_uid').references(() => users.uid, { onDelete: 'cascade' }).notNull(),
+  balanceCoins: integer('balance_coins').default(0),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+

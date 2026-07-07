@@ -1724,8 +1724,11 @@ export default function Dashboard({
   // Real-time Multi-user collaborative synchronization (SSE)
   useEffect(() => {
     let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let active = true;
     
     const connectSSE = () => {
+      if (!active) return;
       console.log("Connecting to Cambodian Garage real-time ticket sync stream...");
       eventSource = new EventSource("/api/realtime/stream");
       
@@ -1763,15 +1766,24 @@ export default function Dashboard({
       });
 
       eventSource.onerror = (err) => {
-        console.error("SSE connection error, closing stream to allow reconnection:", err);
-        eventSource?.close();
-        setTimeout(connectSSE, 3000);
+        console.warn("SSE connection closed or timed out. Reconnecting in 5 seconds...");
+        if (eventSource) {
+          eventSource.close();
+        }
+        if (active) {
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        }
       };
     };
     
     connectSSE();
     
     return () => {
+      active = false;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       if (eventSource) {
         eventSource.close();
       }

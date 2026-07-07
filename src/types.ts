@@ -3,6 +3,94 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface SubscriptionPlan {
+  id: string;
+  plan_name: string;
+  plan_type: 'user' | 'business' | 'enterprise';
+  monthly_price: number;
+  yearly_price: number;
+  vehicle_limit: number;
+  staff_limit: number;
+  post_limit: number;
+  ai_limit: number;
+  storage_limit: number;
+  telegram_enabled: boolean;
+  fleet_enabled: boolean;
+  pos_enabled: boolean;
+  inventory_enabled: boolean;
+  boost_credit: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UserSubscriptionRecord {
+  id: string | number;
+  user_id: string | number;
+  plan_id: string;
+  status: 'active' | 'expired' | 'cancelled' | 'trial';
+  start_date: string;
+  end_date: string;
+  payment_method: string;
+  auto_renew: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PlanFeatureLimit {
+  id: string | number;
+  plan_id: string;
+  feature_key: string;
+  limit_type: 'count' | 'boolean' | 'storage' | 'usage';
+  limit_value: string | number;
+  reset_period: 'daily' | 'monthly' | 'yearly' | 'lifetime';
+}
+
+export interface PlatformFee {
+  id: string | number;
+  fee_name: string;
+  category: 'vehicle_sale' | 'spare_part' | 'delivery' | 'boost' | 'verification';
+  fee_type: 'fixed' | 'percentage';
+  fee_value: number;
+  min_fee: number;
+  max_fee: number;
+  payer: 'buyer' | 'seller' | 'business';
+  is_active: boolean;
+}
+
+export interface BoostPackage {
+  id: string | number;
+  boost_name: string;
+  duration_days: number;
+  price: number;
+  placement_type: 'homepage' | 'marketplace_top' | 'map_pin' | 'search_top';
+  target_type: 'vehicle' | 'spare_part' | 'garage' | 'shop' | 'mechanic';
+  is_active: boolean;
+}
+
+export interface VehicleHistoryReport {
+  id: string | number;
+  user_id: string | number;
+  vehicle_id: string | number;
+  report_type: string;
+  price: number;
+  payment_status: 'pending' | 'paid' | 'failed' | string;
+  report_status: 'processing' | 'completed' | 'failed' | string;
+  created_at?: string;
+}
+
+export interface BusinessSubscriptionRecord {
+  id: string | number;
+  business_id: string | number;
+  business_type: 'garage' | 'spare_parts_shop' | 'petrol_station' | 'ev_station' | 'mechanic';
+  plan_id: string | number;
+  branch_limit: number;
+  staff_limit: number;
+  status: 'active' | 'expired' | 'cancelled' | 'trial' | string;
+  start_date: string;
+  end_date: string;
+}
+
 export interface BusinessSubscription {
   planType: 'Free' | 'Home' | 'Pro' | 'Enterprise';
   isVerified: boolean;
@@ -20,7 +108,7 @@ export interface ShopBusinessSubscription extends BusinessSubscription {
   eCommerceEnabled: boolean;
 }
 
-export interface UserSubscription {
+export interface Subscription {
   planType: 'Free' | 'Home' | 'Pro' | 'Enterprise';
   status: 'active' | 'canceled' | 'past_due';
   expiryDate?: string;
@@ -31,6 +119,47 @@ export interface UserSubscription {
   aiCount: number;
   aiLimit: number;
 }
+
+export interface UserSubscription extends Subscription {}
+
+export interface PlanConfiguration {
+  planType: 'Free' | 'Home' | 'Pro' | 'Enterprise';
+  vehicleLimit: number;
+  postLimit: number;
+  aiLimit: number;
+  staffLimit: number;
+}
+
+export const SUBSCRIPTION_PLANS: Record<'Free' | 'Home' | 'Pro' | 'Enterprise', PlanConfiguration> = {
+  Free: {
+    planType: 'Free',
+    vehicleLimit: 2,
+    postLimit: 1,
+    aiLimit: 3,
+    staffLimit: 1,
+  },
+  Home: {
+    planType: 'Home',
+    vehicleLimit: 5,
+    postLimit: 5,
+    aiLimit: 15,
+    staffLimit: 5,
+  },
+  Pro: {
+    planType: 'Pro',
+    vehicleLimit: 30,
+    postLimit: 30,
+    aiLimit: 50,
+    staffLimit: 15,
+  },
+  Enterprise: {
+    planType: 'Enterprise',
+    vehicleLimit: 999999,
+    postLimit: 999999,
+    aiLimit: 999999,
+    staffLimit: 999999,
+  },
+};
 
 export interface UserProfile {
   id: number;
@@ -47,13 +176,39 @@ export interface UserProfile {
   
   // Subscription / Monetization fields for MVP
   subscriptionTier?: 'Free' | 'Home' | 'Pro' | 'Enterprise';
-  subscriptionStatus?: 'active' | 'canceled' | 'past_due';
+  subscriptionStatus?: 'active' | 'canceled' | 'past_due' | 'trial' | 'expired' | string;
   subscriptionExpiry?: string;
-  aiUsageCount?: number;
-  aiUsageLimit?: number;
+  
+  // Plan usage counters and limits for logical enforcement (integrated from Subscription and BusinessSubscription)
+  vehicleCount?: number;
+  vehicleLimit?: number;
+  postCount?: number;
+  postLimit?: number;
+  aiUsageCount?: number; // DB backend schema compatibility
+  aiUsageLimit?: number; // DB backend schema compatibility
+  aiCount?: number;      // UI/Admin compatibility alias
+  aiLimit?: number;      // UI/Admin compatibility alias
+  staffCount?: number;
+  staffLimit?: number;
+  branchCount?: number;
+  branchLimit?: number;
+  
+  // Essential logic-based tier enforcement boolean flags
+  telegram_enabled?: boolean;
+  fleet_enabled?: boolean;
+  pos_enabled?: boolean;
+  inventory_enabled?: boolean;
+  eCommerceEnabled?: boolean;
+  hasEquipmentVerification?: boolean;
+  diagnosticBays?: number;
+  
+  // Business subscription parameters and flags
   businessSubscriptionTier?: 'None' | 'Garage_Basic' | 'Garage_Pro' | 'Shop_Basic' | 'Shop_Pro' | 'Freelancer_Pro' | 'Station_Pro';
   verifiedBadge?: boolean;
   boostCredits?: number;
+  isVerified?: boolean;
+  featuredListing?: boolean;
+  
   businessSubscription?: BusinessSubscription | GarageBusinessSubscription | ShopBusinessSubscription;
   subscription?: UserSubscription;
 }

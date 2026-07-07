@@ -134,8 +134,11 @@ export default function PartnerPortal({
   // Real-time Multi-user collaborative synchronization (SSE) for Garage Portal
   useEffect(() => {
     let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let active = true;
     
     const connectSSE = () => {
+      if (!active) return;
       console.log("Partner Portal: Connecting to real-time sync stream...");
       eventSource = new EventSource("/api/realtime/stream");
       
@@ -168,15 +171,24 @@ export default function PartnerPortal({
       });
 
       eventSource.onerror = (err) => {
-        console.error("Partner Portal: SSE error, reconnecting...", err);
-        eventSource?.close();
-        setTimeout(connectSSE, 3000);
+        console.warn("Partner Portal: SSE connection closed or timed out. Reconnecting in 5 seconds...");
+        if (eventSource) {
+          eventSource.close();
+        }
+        if (active) {
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(connectSSE, 5000);
+        }
       };
     };
     
     connectSSE();
     
     return () => {
+      active = false;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
       if (eventSource) {
         eventSource.close();
       }

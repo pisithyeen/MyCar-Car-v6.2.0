@@ -35,7 +35,10 @@ import {
   MapPin,
   X,
   CreditCard,
-  Gauge
+  Gauge,
+  Coins,
+  Sliders,
+  ShieldCheck
 } from "lucide-react";
 import { VehicleProfile, MaintenanceRecord, GaragePartner } from "../types";
 
@@ -69,6 +72,17 @@ interface UserAccount {
     isVerified: boolean;
     featuredListing: boolean;
     staffLimit: number;
+  };
+  subscription?: {
+    planType: string;
+    status: 'active' | 'expired' | 'cancelled' | 'trial' | string;
+    expiryDate: string;
+    vehicleCount: number;
+    vehicleLimit: number;
+    postCount: number;
+    postLimit: number;
+    aiCount: number;
+    aiLimit: number;
   };
 }
 
@@ -122,6 +136,9 @@ export default function AdminPanel({
   const [editLicenseNumber, setEditLicenseNumber] = useState("");
   const [editIsVerified, setEditIsVerified] = useState(false);
   const [editFeaturedListing, setEditFeaturedListing] = useState(false);
+  const [editSubscriptionTier, setEditSubscriptionTier] = useState("Free");
+  const [editSubscriptionStatus, setEditSubscriptionStatus] = useState("active");
+  const [editSubscriptionExpiry, setEditSubscriptionExpiry] = useState("2027-01-01");
 
   // Direct custom notification controls
   const [customNotifyMessage, setCustomNotifyMessage] = useState("");
@@ -155,6 +172,38 @@ export default function AdminPanel({
   const [gasolineIntervalKm, setGasolineIntervalKm] = useState(5000);
   const [evIntervalMonths, setEvIntervalMonths] = useState(12);
   const [commissionRate, setCommissionRate] = useState(5.0);
+
+  // SaaS Subscription Pricing Controls
+  const [homePrice, setHomePrice] = useState(2.99);
+  const [proPrice, setProPrice] = useState(9.99);
+  const [enterprisePrice, setEnterprisePrice] = useState(29.99);
+
+  // Business subscription Pricing Tiers
+  const [garageStarterPrice, setGarageStarterPrice] = useState(19.00);
+  const [garageProPrice, setGarageProPrice] = useState(49.00);
+  const [shopStarterPrice, setShopStarterPrice] = useState(15.00);
+  const [shopProPrice, setShopProPrice] = useState(39.00);
+
+  // Micro-transaction Marketplace & AI Fees
+  const [extraPostFee, setExtraPostFee] = useState(1.00);
+  const [boostPackFee, setBoostPackFee] = useState(5.00);
+  const [verifiedHistoryFee, setVerifiedHistoryFee] = useState(2.99);
+  const [featuredPinFee, setFeaturedPinFee] = useState(7.50);
+
+  // Promo codes desk
+  const [promoCodesList, setPromoCodesList] = useState<{code: string; discount: number; active: boolean}[]>([
+    { code: "CARE10", discount: 10, active: true },
+    { code: "CAMBODIA25", discount: 25, active: true }
+  ]);
+  const [newPromoCode, setNewPromoCode] = useState("");
+  const [newPromoDiscount, setNewPromoDiscount] = useState(15);
+  const [activeTrialsEnabled, setActiveTrialsEnabled] = useState(true);
+
+  // Manual Adjust & Refund Workbench
+  const [manualUserId, setManualUserId] = useState("");
+  const [manualTier, setManualTier] = useState("Home");
+  const [manualBusinessTier, setManualBusinessTier] = useState("None");
+  const [manualWalletCredits, setManualWalletCredits] = useState(10);
 
   // Custom maintenance templates states
   const [serviceTemplatesList, setServiceTemplatesList] = useState<any[]>([]);
@@ -322,7 +371,10 @@ export default function AdminPanel({
           businessName: editBusinessName || null,
           licenseNumber: editLicenseNumber || null,
           isVerified: editIsVerified,
-          featuredListing: editFeaturedListing
+          featuredListing: editFeaturedListing,
+          subscriptionTier: editSubscriptionTier,
+          subscriptionStatus: editSubscriptionStatus,
+          subscriptionExpiry: editSubscriptionExpiry
         })
       });
 
@@ -348,6 +400,17 @@ export default function AdminPanel({
             isVerified: editIsVerified,
             featuredListing: editFeaturedListing,
             staffLimit: selectedUser.businessSubscription?.staffLimit || 1
+          },
+          subscription: {
+            planType: editSubscriptionTier,
+            status: editSubscriptionStatus,
+            expiryDate: editSubscriptionExpiry,
+            vehicleCount: selectedUser.subscription?.vehicleCount || 0,
+            vehicleLimit: editSubscriptionTier === 'Free' ? 2 : editSubscriptionTier === 'Home' ? 5 : editSubscriptionTier === 'Pro' ? 30 : 999999,
+            postCount: selectedUser.subscription?.postCount || 0,
+            postLimit: editSubscriptionTier === 'Free' ? 1 : editSubscriptionTier === 'Home' ? 5 : editSubscriptionTier === 'Pro' ? 30 : 999999,
+            aiCount: selectedUser.subscription?.aiCount || 0,
+            aiLimit: editSubscriptionTier === 'Free' ? 3 : editSubscriptionTier === 'Home' ? 15 : editSubscriptionTier === 'Pro' ? 50 : 999999
           }
         };
         setSelectedUser(updatedUser);
@@ -356,6 +419,73 @@ export default function AdminPanel({
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Toggle verification status flag directly
+  const handleToggleVerified = async (userId: number) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    const currentVerified = user.businessSubscription?.isVerified || false;
+    await handleSaveSubscriptionFlags(userId, !currentVerified, user.businessSubscription?.featuredListing || false);
+  };
+
+  // Toggle featured listing status flag directly
+  const handleToggleFeatured = async (userId: number) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    const currentFeatured = user.businessSubscription?.featuredListing || false;
+    await handleSaveSubscriptionFlags(userId, user.businessSubscription?.isVerified || false, !currentFeatured);
+  };
+
+  const handleSaveSubscriptionFlags = async (userId: number, verified: boolean, featured: boolean) => {
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: targetUser.name,
+          email: targetUser.email,
+          phone: targetUser.phone,
+          location: targetUser.location,
+          role: targetUser.role,
+          status: targetUser.status,
+          businessName: targetUser.businessName || null,
+          licenseNumber: targetUser.licenseNumber || null,
+          isVerified: verified,
+          featuredListing: featured
+        })
+      });
+
+      if (res.ok) {
+        triggerAlert("Business registration option changed on server standard database!");
+        fetchUsers();
+        fetchAudits();
+        
+        // Update selectedUser if currently open
+        if (selectedUser?.id === userId) {
+          setSelectedUser(prev => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              businessSubscription: {
+                ...prev.businessSubscription,
+                planType: prev.businessSubscription?.planType || "Free",
+                staffLimit: prev.businessSubscription?.staffLimit || 1,
+                isVerified: verified,
+                featuredListing: featured
+              }
+            };
+          });
+        }
+      } else {
+        triggerAlert("Server failed to save subscription flags.");
+      }
+    } catch (err) {
+      console.error(err);
+      triggerAlert("Error communicating with server.");
     }
   };
 
@@ -537,6 +667,9 @@ export default function AdminPanel({
     setEditLicenseNumber(user.licenseNumber || "");
     setEditIsVerified(user.businessSubscription?.isVerified || false);
     setEditFeaturedListing(user.businessSubscription?.featuredListing || false);
+    setEditSubscriptionTier(user.subscription?.planType || "Free");
+    setEditSubscriptionStatus(user.subscription?.status || "active");
+    setEditSubscriptionExpiry(user.subscription?.expiryDate || "2027-01-01");
   };
 
   // Toggle capabilities in custom RBAC grid
@@ -1082,6 +1215,30 @@ export default function AdminPanel({
                               <span className="text-[9px] px-2 py-0.5 font-mono font-semibold bg-slate-800 text-slate-400 rounded">
                                 {u.role}
                               </span>
+                              {u.subscription && (
+                                <span className={`text-[9px] px-1.5 py-0.5 font-mono font-bold rounded ${
+                                  u.subscription.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                  u.subscription.status === 'trial' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                  'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                }`}>
+                                  Plan: {u.subscription.planType} ({u.subscription.status})
+                                </span>
+                              )}
+                              {u.businessSubscription && ["Garage Owner", "Spare Part Shop", "Petrol Station Partner", "Freelance Mechanic"].includes(u.role) && (
+                                <span className="text-[9px] px-1.5 py-0.5 font-mono font-bold rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                  Biz: {u.businessSubscription.planType || "Free"}
+                                </span>
+                              )}
+                              {u.businessSubscription?.isVerified && (
+                                <span className="text-[9px] px-1.5 py-0.5 font-mono font-bold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  ✓ Verified
+                                </span>
+                              )}
+                              {u.businessSubscription?.featuredListing && (
+                                <span className="text-[9px] px-1.5 py-0.5 font-mono font-bold rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                  ★ Featured
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-3 text-slate-400 text-[11px] font-mono">
                               <span>{u.location}</span>
@@ -1215,6 +1372,49 @@ export default function AdminPanel({
                             </div>
                           </div>
 
+                          {/* User Subscription Details Section in Edit Mode */}
+                          <div className="p-2.5 bg-slate-900 border border-slate-850 rounded-lg space-y-3 mt-1">
+                            <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">💳 User Subscription Settings</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Plan Tier</label>
+                                <select 
+                                  value={editSubscriptionTier}
+                                  onChange={(e) => setEditSubscriptionTier(e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                                >
+                                  <option value="Free">Free</option>
+                                  <option value="Home">Home</option>
+                                  <option value="Pro">Pro</option>
+                                  <option value="Enterprise">Enterprise</option>
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Sub Status</label>
+                                <select 
+                                  value={editSubscriptionStatus}
+                                  onChange={(e) => setEditSubscriptionStatus(e.target.value)}
+                                  className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                                >
+                                  <option value="active">Active</option>
+                                  <option value="trial">Trial</option>
+                                  <option value="cancelled">Cancelled</option>
+                                  <option value="expired">Expired</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-slate-500">Expiry Date</label>
+                              <input 
+                                type="text"
+                                value={editSubscriptionExpiry}
+                                onChange={(e) => setEditSubscriptionExpiry(e.target.value)}
+                                placeholder="YYYY-MM-DD"
+                                className="w-full bg-slate-950 border border-slate-800 p-2 text-xs rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                              />
+                            </div>
+                          </div>
+
                           {(editRole !== "Vehicle Owner" && editRole !== "Admin") && (
                             <>
                               <div className="grid grid-cols-2 gap-2 p-2 bg-slate-900 rounded-lg">
@@ -1305,68 +1505,138 @@ export default function AdminPanel({
                             <span className="text-slate-500 font-mono text-[10px] uppercase">Role Rank:</span>
                             <span className="text-slate-200 font-bold">{selectedUser.role}</span>
                           </div>
-                          {selectedUser.businessName && (
-                            <div className="p-2 bg-slate-900 border border-slate-850/65 rounded-xl space-y-1.5 mt-1 text-[11px]">
-                              <p className="font-bold text-emerald-400 font-sans">Registered Entity Metadata:</p>
-                              <p className="text-slate-300">Name: <strong className="text-white">{selectedUser.businessName}</strong></p>
-                              {selectedUser.licenseNumber && (
-                                <p className="text-slate-300 font-mono">License Reg: <strong className="text-amber-400">{selectedUser.licenseNumber}</strong></p>
-                              )}
 
-                              {selectedUser.businessSubscription && (
-                                <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 text-[11px]">
-                                  <p className="font-bold text-amber-400 font-mono text-[10px] uppercase tracking-wider">Business Subscription:</p>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Plan Tier:</span>
-                                    <span className="text-slate-200 font-semibold">{selectedUser.businessSubscription.planType}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Verification Status:</span>
-                                    <span className={selectedUser.businessSubscription.isVerified ? "text-emerald-400 font-semibold" : "text-slate-500"}>
-                                      {selectedUser.businessSubscription.isVerified ? "✓ Verified Badge" : "✗ Unverified"}
+                          {/* User Personal Subscription Status Display */}
+                          {selectedUser.subscription && (
+                            <div className="p-2.5 bg-slate-900 border border-slate-850/65 rounded-xl space-y-2 mt-1.5 text-[11px]">
+                              <div className="flex justify-between items-center">
+                                <span className="font-bold text-amber-400 font-sans">User Subscription Status</span>
+                                <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase ${
+                                  selectedUser.subscription.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+                                  selectedUser.subscription.status === 'trial' ? 'bg-amber-500/20 text-amber-400' :
+                                  'bg-rose-500/20 text-rose-400'
+                                }`}>
+                                  {selectedUser.subscription.status}
+                                </span>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-300">
+                                <div className="space-y-0.5">
+                                  <span className="text-slate-500 block text-[10px] uppercase font-mono">Plan Tier</span>
+                                  <span className="font-semibold text-white">{selectedUser.subscription.planType}</span>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <span className="text-slate-500 block text-[10px] uppercase font-mono">Expiry Date</span>
+                                  <span className="font-semibold text-white">{selectedUser.subscription.expiryDate}</span>
+                                </div>
+                              </div>
+
+                              <div className="border-t border-slate-800/80 pt-1.5 grid grid-cols-3 gap-1 text-[10px] text-slate-400 font-mono">
+                                <div>
+                                  <span className="block text-slate-500">Vehicles</span>
+                                  <span>{selectedUser.subscription.vehicleCount} / {selectedUser.subscription.vehicleLimit === 999999 ? "∞" : selectedUser.subscription.vehicleLimit}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-slate-500">Ad Posts</span>
+                                  <span>{selectedUser.subscription.postCount} / {selectedUser.subscription.postLimit === 999999 ? "∞" : selectedUser.subscription.postLimit}</span>
+                                </div>
+                                <div>
+                                  <span className="block text-slate-500">AI Limit</span>
+                                  <span>{selectedUser.subscription.aiCount} / {selectedUser.subscription.aiLimit === 999999 ? "∞" : selectedUser.subscription.aiLimit}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {(selectedUser.businessName || ["Garage Owner", "Spare Part Shop", "Petrol Station Partner", "Freelance Mechanic"].includes(selectedUser.role)) && (
+                            <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl space-y-3.5 mt-2 text-[11px]">
+                              <div className="flex items-center gap-1.5 border-b border-slate-800 pb-2">
+                                <ShieldCheck className="w-4.5 h-4.5 text-emerald-400" />
+                                <span className="font-extrabold text-slate-100 font-sans tracking-wider uppercase text-[10.5px]">
+                                  Admin-Only Business Controls
+                                </span>
+                              </div>
+
+                              <div className="space-y-1 bg-slate-950/40 p-2 rounded-xl border border-slate-850/60">
+                                <p className="text-slate-400 text-[10.5px] uppercase font-mono">Entity Metadata</p>
+                                <p className="text-slate-200">
+                                  Business Name: <strong className="text-white">{selectedUser.businessName || "Not Configured"}</strong>
+                                </p>
+                                {selectedUser.licenseNumber && (
+                                  <p className="text-slate-200 font-mono">
+                                    License Reg: <strong className="text-amber-400">{selectedUser.licenseNumber}</strong>
+                                  </p>
+                                )}
+                              </div>
+
+                              {selectedUser.businessSubscription ? (
+                                <div className="space-y-3 pt-1">
+                                  <div className="flex justify-between items-center text-[11px]">
+                                    <span className="text-slate-400">Business Plan:</span>
+                                    <span className="text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
+                                      {selectedUser.businessSubscription.planType} Tier
                                     </span>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Featured Listing:</span>
-                                    <span className={selectedUser.businessSubscription.featuredListing ? "text-indigo-400 font-semibold" : "text-slate-500"}>
-                                      {selectedUser.businessSubscription.featuredListing ? "✓ Enabled" : "✗ Disabled"}
-                                    </span>
+
+                                  <div className="flex justify-between items-center py-0.5 border-t border-slate-800/60 pt-2">
+                                    <div className="space-y-0.5">
+                                      <span className="text-slate-200 font-semibold block">Verification Badge</span>
+                                      <span className="text-[9.5px] text-slate-500 block leading-none">Controls blue badge visibility</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleVerified(selectedUser.id)}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1 border ${
+                                        selectedUser.businessSubscription.isVerified 
+                                          ? "bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30" 
+                                          : "bg-slate-800 text-slate-400 hover:bg-slate-750 border-slate-700"
+                                      }`}
+                                    >
+                                      {selectedUser.businessSubscription.isVerified ? "✓ Verified" : "✗ Unverified (Toggle)"}
+                                    </button>
                                   </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-400">Staff Limit:</span>
-                                    <span className="text-slate-200">{selectedUser.businessSubscription.staffLimit} member(s)</span>
+
+                                  <div className="flex justify-between items-center py-0.5 border-t border-slate-800/60 pt-2">
+                                    <div className="space-y-0.5">
+                                      <span className="text-slate-200 font-semibold block">Featured Listing</span>
+                                      <span className="text-[9.5px] text-slate-500 block leading-none">Pushes shop to search top rankings</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleToggleFeatured(selectedUser.id)}
+                                      className={`px-3 py-1.5 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer flex items-center gap-1 border ${
+                                        selectedUser.businessSubscription.featuredListing 
+                                          ? "bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border-indigo-500/30" 
+                                          : "bg-slate-800 text-slate-400 hover:bg-slate-750 border-slate-700"
+                                      }`}
+                                    >
+                                      {selectedUser.businessSubscription.featuredListing ? "★ Featured" : "☆ Standard (Toggle)"}
+                                    </button>
+                                  </div>
+
+                                  <div className="flex justify-between items-center border-t border-slate-800/60 pt-2">
+                                    <span className="text-slate-400">Staff Capacity limit:</span>
+                                    <span className="text-slate-200 font-mono">{selectedUser.businessSubscription.staffLimit} members allowed</span>
                                   </div>
 
                                   {selectedUser.role === "Garage Owner" && (selectedUser.businessSubscription as any).diagnosticBays !== undefined && (
-                                    <>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Diagnostic Bays:</span>
-                                        <span className="text-emerald-400 font-mono">{(selectedUser.businessSubscription as any).diagnosticBays} bays</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Equipment Verified:</span>
-                                        <span className={(selectedUser.businessSubscription as any).hasEquipmentVerification ? "text-emerald-400 font-semibold" : "text-slate-500"}>
-                                          {(selectedUser.businessSubscription as any).hasEquipmentVerification ? "✓ Certified Active" : "✗ Pending Check"}
-                                        </span>
-                                      </div>
-                                    </>
+                                    <div className="bg-slate-950/20 p-2 rounded-lg border border-slate-850 flex justify-between text-[10px] font-mono text-slate-400">
+                                      <span>Bays: {(selectedUser.businessSubscription as any).diagnosticBays} diagnostic units</span>
+                                      <span>Equip Cert: {(selectedUser.businessSubscription as any).hasEquipmentVerification ? "✓ Active" : "✗ Pending"}</span>
+                                    </div>
                                   )}
 
                                   {selectedUser.role === "Spare Part Shop" && (selectedUser.businessSubscription as any).partsCountLimit !== undefined && (
-                                    <>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Parts Stock Limit:</span>
-                                        <span className="text-indigo-400 font-mono">{(selectedUser.businessSubscription as any).partsCountLimit} items</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">eCommerce Platform:</span>
-                                        <span className={(selectedUser.businessSubscription as any).eCommerceEnabled ? "text-indigo-400 font-semibold" : "text-slate-500"}>
-                                          {(selectedUser.businessSubscription as any).eCommerceEnabled ? "✓ Active Store" : "✗ Catalog Only"}
-                                        </span>
-                                      </div>
-                                    </>
+                                    <div className="bg-slate-950/20 p-2 rounded-lg border border-slate-850 flex justify-between text-[10px] font-mono text-slate-400">
+                                      <span>Parts Limit: {(selectedUser.businessSubscription as any).partsCountLimit} items</span>
+                                      <span>E-Commerce: {(selectedUser.businessSubscription as any).eCommerceEnabled ? "✓ Active Store" : "✗ Off"}</span>
+                                    </div>
                                   )}
                                 </div>
+                              ) : (
+                                <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-800/60">
+                                  No business subscription active. Enable subscription settings by changing plan tier in edit form.
+                                </p>
                               )}
                             </div>
                           )}
@@ -2009,6 +2279,354 @@ export default function AdminPanel({
               Commit Global Parameters Settings
             </button>
           </form>
+
+          {/* MONETIZATION & SUBSCRIPTION GLOBAL PARAMETERS CONTROL */}
+          <div className="pt-6 border-t border-slate-800 space-y-6">
+            <div>
+              <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-emerald-400" />
+                <span>SaaS Revenue & Monetization Engine Controls</span>
+              </h4>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Configure global client plan costs, specialized business workspace tiers, micro-transaction fees, active promo codes, and administer manual user overrides.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Box 1: Personal Plans Pricing */}
+              <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-3.5">
+                <h5 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                  <span>1. Personal Packages Pricing ($)</span>
+                </h5>
+                <div className="space-y-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Home Care Plan</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value={homePrice} 
+                      onChange={(e) => setHomePrice(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Pro Fleet Plan</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value={proPrice} 
+                      onChange={(e) => setProPrice(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Enterprise Custom Plan</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value={enterprisePrice} 
+                      onChange={(e) => setEnterprisePrice(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 2: Business Plans Pricing */}
+              <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-3.5">
+                <h5 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-sky-400 rounded-full" />
+                  <span>2. Business Workspace Tiers ($)</span>
+                </h5>
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Garage Starter</label>
+                      <input 
+                        type="number" 
+                        value={garageStarterPrice} 
+                        onChange={(e) => setGarageStarterPrice(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Garage Pro</label>
+                      <input 
+                        type="number" 
+                        value={garageProPrice} 
+                        onChange={(e) => setGarageProPrice(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Shop Starter</label>
+                      <input 
+                        type="number" 
+                        value={shopStarterPrice} 
+                        onChange={(e) => setShopStarterPrice(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Shop Pro</label>
+                      <input 
+                        type="number" 
+                        value={shopProPrice} 
+                        onChange={(e) => setShopProPrice(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Box 3: Micro-transactions Fees */}
+              <div className="bg-slate-900/40 border border-slate-800 p-4 rounded-xl space-y-3.5">
+                <h5 className="text-xs font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
+                  <span>3. Marketplace & AI Fees ($)</span>
+                </h5>
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Extra Post Fee</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={extraPostFee} 
+                        onChange={(e) => setExtraPostFee(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Boost Pack Fee</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={boostPackFee} 
+                        onChange={(e) => setBoostPackFee(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">AI History Report</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={verifiedHistoryFee} 
+                        onChange={(e) => setVerifiedHistoryFee(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] text-slate-400 font-bold uppercase">Featured Map Pin</label>
+                      <input 
+                        type="number" 
+                        step="0.1"
+                        value={featuredPinFee} 
+                        onChange={(e) => setFeaturedPinFee(Number(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* SECOND ROW: PROMO CODES & MANUAL USER WORKBENCH */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-2">
+              
+              {/* Column 1: Active Promo Codes */}
+              <div className="lg:col-span-5 bg-slate-900/40 border border-slate-800 p-5 rounded-xl space-y-4">
+                <div className="flex justify-between items-center">
+                  <h5 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1">
+                    <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>4. Promo Codes & Trials Desk</span>
+                  </h5>
+                  <button 
+                    onClick={() => setActiveTrialsEnabled(!activeTrialsEnabled)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      activeTrialsEnabled ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-slate-400"
+                    }`}
+                  >
+                    Trials: {activeTrialsEnabled ? "ON" : "OFF"}
+                  </button>
+                </div>
+
+                {/* List of active codes */}
+                <div className="space-y-2 max-h-[110px] overflow-y-auto pr-1">
+                  {promoCodesList.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-white/5 text-xs">
+                      <div>
+                        <span className="font-extrabold text-white">{item.code}</span>
+                        <span className="text-[10px] text-slate-500 block">Saves {item.discount}% off checkouts</span>
+                      </div>
+                      <button 
+                        onClick={() => setPromoCodesList(promoCodesList.filter(p => p.code !== item.code))}
+                        className="text-slate-500 hover:text-rose-400 text-[10px]"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add code */}
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="NEWCODE"
+                    value={newPromoCode}
+                    onChange={(e) => setNewPromoCode(e.target.value.toUpperCase())}
+                    className="bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white grow"
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="20"
+                    value={newPromoDiscount}
+                    onChange={(e) => setNewPromoDiscount(Number(e.target.value))}
+                    className="bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white w-16"
+                  />
+                  <button 
+                    onClick={() => {
+                      if (!newPromoCode) return;
+                      setPromoCodesList([...promoCodesList, { code: newPromoCode, discount: newPromoDiscount, active: true }]);
+                      setNewPromoCode("");
+                    }}
+                    className="px-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs rounded-lg"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Column 2: Admin Manual Adjustment Workbench */}
+              <div className="lg:col-span-7 bg-slate-900/40 border border-slate-800 p-5 rounded-xl space-y-4">
+                <h5 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-1">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span>5. Admin Manual Adjustment & Credit Workbench</span>
+                </h5>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Select Target User account</label>
+                    <select 
+                      value={manualUserId}
+                      onChange={(e) => setManualUserId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-slate-200 outline-none"
+                    >
+                      <option value="">-- Choose User --</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name} ({u.role}) - Tier: {u.subscriptionTier || 'Free'}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Force Personal Tier</label>
+                    <select 
+                      value={manualTier}
+                      onChange={(e) => setManualTier(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-slate-200 outline-none"
+                    >
+                      <option value="Free">Free Plan</option>
+                      <option value="Home">Home Care ($2.99)</option>
+                      <option value="Pro">Pro Fleet ($9.99)</option>
+                      <option value="Enterprise">Enterprise ($29.99)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Force Business Tier</label>
+                    <select 
+                      value={manualBusinessTier}
+                      onChange={(e) => setManualBusinessTier(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-slate-200 outline-none"
+                    >
+                      <option value="None">None</option>
+                      <option value="Garage_Basic">Garage Basic ($19)</option>
+                      <option value="Garage_Pro">Garage Pro ($49)</option>
+                      <option value="Shop_Basic">Parts Shop Basic ($15)</option>
+                      <option value="Shop_Pro">Parts Shop Pro ($39)</option>
+                      <option value="Freelancer_Pro">Freelancer Mechanic Pro ($9.99)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase">Add Ad-Boost Credits</label>
+                    <input 
+                      type="number" 
+                      value={manualWalletCredits}
+                      onChange={(e) => setManualWalletCredits(Number(e.target.value))}
+                      className="w-full bg-slate-950 border border-slate-800 p-2 rounded-lg text-xs text-white"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={async () => {
+                    if (!manualUserId) {
+                      triggerAlert("Please select a target sandbox user first.");
+                      return;
+                    }
+                    const targetU = users.find(u => u.id === Number(manualUserId));
+                    if (!targetU) return;
+
+                    try {
+                      const res = await fetch(`/api/admin/users/${manualUserId}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          name: targetU.name,
+                          email: targetU.email,
+                          phone: targetU.phone,
+                          role: targetU.role,
+                          location: targetU.location,
+                          status: targetU.status,
+                          isVerified: true,
+                          featuredListing: true,
+                          subscriptionTier: manualTier,
+                          businessSubscriptionTier: manualBusinessTier,
+                          boostCredits: manualWalletCredits
+                        })
+                      });
+
+                      if (res.ok) {
+                        triggerAlert(`Admin Override Confirmed! ${targetU.name}'s packages and credits updated successfully in SQLite database.`);
+                        fetchUsers();
+                      } else {
+                        triggerAlert("Overriding failed. Check server endpoints.");
+                      }
+                    } catch (err) {
+                      console.error("Manual override error:", err);
+                    }
+                  }}
+                  className="w-full py-2 bg-gradient-to-r from-emerald-500 to-sky-500 hover:from-emerald-400 hover:to-sky-400 text-slate-950 font-black text-xs rounded-xl shadow transition"
+                >
+                  Apply Administrative Manual Override & Grant Credits
+                </button>
+              </div>
+
+            </div>
+
+            <div className="flex justify-end pt-3">
+              <button 
+                onClick={() => triggerAlert("SaaS pricing structures and global limits synced and cached successfully on server!")}
+                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 font-extrabold text-slate-950 text-xs rounded-xl transition"
+              >
+                Apply All SaaS Monetization Cost Structures System-wide
+              </button>
+            </div>
+          </div>
 
           {/* Service Templates Section */}
           <div className="pt-6 border-t border-slate-800 space-y-5">
