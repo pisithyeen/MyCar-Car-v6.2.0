@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { Analytics } from '@vercel/analytics/react';
 import { 
   Car, 
   Sparkles, 
@@ -1007,6 +1008,8 @@ export default function App() {
           setIsLoggedIn(true);
         }}
       />
+
+
     );
   }
 
@@ -2284,6 +2287,10 @@ export default function App() {
         onAddReminder={handleOnboardingAddReminder}
         onGrantCoins={handleOnboardingGrantCoins}
       />
+
+      {/* Vercel Web Analytics */}
+      <Analytics />
+
     </div>
   );
 }
